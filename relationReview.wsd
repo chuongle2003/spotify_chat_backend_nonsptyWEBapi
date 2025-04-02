@@ -1,0 +1,154 @@
+@startuml
+' Định nghĩa các class cho app accounts
+package "accounts" {
+  class User {
+    + username: string
+    + email: string
+    + password: string
+    + avatar: ImageField
+    + bio: TextField
+    + following: ManyToManyField[User]
+    + favorite_songs: ManyToManyField[Song]
+    + groups: ManyToManyField[Group]
+    + user_permissions: ManyToManyField[Permission]
+  }
+}
+
+' Định nghĩa các class cho app music
+package "music" {
+  class Song {
+    + title: string
+    + artist: string
+    + album: string
+    + duration: int
+    + audio_file: FileField
+    + cover_image: ImageField
+    + genre: string
+    + likes_count: int
+    + play_count: int
+    + uploaded_by: ForeignKey[User]
+    + created_at: DateTime
+    + lyrics: TextField
+  }
+  
+  class Playlist {
+    + name: string
+    + user: ForeignKey[User]
+    + songs: ManyToManyField[Song]
+    + description: TextField
+    + is_public: boolean
+    + cover_image: ImageField
+    + followers: ManyToManyField[User]
+    + created_at: DateTime
+    + updated_at: DateTime
+    + can_access(user): boolean
+  }
+  
+  class Album {
+    + title: string
+    + artist: string
+    + release_date: Date
+    + cover_image: ImageField
+    + description: TextField
+    + created_at: DateTime
+  }
+  
+  class Genre {
+    + name: string
+    + description: TextField
+  }
+  
+  class Rating {
+    + user: ForeignKey[User]
+    + song: ForeignKey[Song]
+    + rating: int
+    + created_at: DateTime
+  }
+  
+  class Comment {
+    + user: ForeignKey[User]
+    + song: ForeignKey[Song]
+    + content: TextField
+    + created_at: DateTime
+  }
+  
+  class SearchHistory {
+    + user: ForeignKey[User]
+    + query: string
+    + timestamp: DateTime
+  }
+  
+  class UserActivity {
+    + user: ForeignKey[User]
+    + activity_type: string
+    + song: ForeignKey[Song]
+    + playlist: ForeignKey[Playlist]
+    + target_user: ForeignKey[User]
+    + timestamp: DateTime
+  }
+  
+  class SongPlayHistory {
+    + user: ForeignKey[User]
+    + song: ForeignKey[Song]
+    + played_at: DateTime
+  }
+  
+  class MusicMessage {
+    + sender: ForeignKey[User]
+    + receiver: ForeignKey[User]
+    + content: TextField
+    + timestamp: DateTime
+    + is_read: boolean
+    + message_type: string
+    + attachment: FileField
+    + image: ImageField
+    + voice_note: FileField
+    + shared_song: ForeignKey[Song]
+    + shared_playlist: ForeignKey[Playlist]
+  }
+}
+
+' Định nghĩa các class cho app chat
+package "chat" {
+  class ChatMessage {
+    + sender: ForeignKey[User]
+    + receiver: ForeignKey[User]
+    + content: TextField
+    + timestamp: DateTime
+    + is_read: boolean
+    + message_type: string
+    + attachment: FileField
+    + image: ImageField
+    + voice_note: FileField
+    + shared_song: ForeignKey[Song]
+    + shared_playlist: ForeignKey[Playlist]
+    + clean(): void
+    + save(): void
+  }
+}
+
+' Các mối quan hệ
+User "1" -- "0..*" Song : uploads >
+User "1" -- "0..*" Playlist : creates >
+User "1" -- "0..*" Comment : writes >
+User "1" -- "0..*" Rating : gives >
+User "1" -- "0..*" SearchHistory : searches >
+User "1" -- "0..*" UserActivity : performs >
+User "1" -- "0..*" SongPlayHistory : plays >
+User "1" -- "0..*" MusicMessage : sends >
+User "1" -- "0..*" ChatMessage : sends >
+User "0..*" -- "0..*" User : follows >
+User "0..*" -- "0..*" Playlist : follows >
+User "0..*" -- "0..*" Song : favorites >
+
+Song "0..*" -- "0..*" Playlist : belongs to >
+Song "1" -- "0..*" Comment : has >
+Song "1" -- "0..*" Rating : has >
+Song "1" -- "0..*" SongPlayHistory : has >
+Song "1" -- "0..*" MusicMessage : shared in >
+Song "1" -- "0..*" ChatMessage : shared in >
+
+Playlist "1" -- "0..*" MusicMessage : shared in >
+Playlist "1" -- "0..*" ChatMessage : shared in >
+
+@enduml
