@@ -1,36 +1,37 @@
 #!/bin/bash
 
-# Dừng khi gặp lỗi
+# Dừng khi có lỗi
 set -e
 
-echo "Bắt đầu quá trình deployment..."
+echo "🚀 Bắt đầu quá trình deployment..."
 
 # 1. Cài đặt các gói cần thiết
-echo "Cài đặt các gói cần thiết..."
+echo "📦 Cài đặt dependencies..."
 sudo apt update
 sudo apt install -y python3-pip python3-dev python3-venv nginx postgresql postgresql-contrib supervisor redis-server
 
 # 2. Tạo thư mục ứng dụng
-echo "Tạo thư mục ứng dụng..."
 APP_DIR=/home/ubuntu/spotify-chat-backend
+echo "📁 Tạo thư mục ứng dụng tại $APP_DIR..."
 mkdir -p $APP_DIR
 cp -r . $APP_DIR
 
-# 3. Tạo và kích hoạt môi trường ảo
-echo "Cài đặt môi trường Python..."
+# 3. Thiết lập môi trường Python
+echo "🐍 Tạo môi trường ảo và cài dependencies..."
 cd $APP_DIR
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
+pip install django-environ
 
-# 4. Cấu hình Environment
-echo "Cấu hình environment..."
-cat > .env << EOL
+# 4. Cấu hình .env
+echo "⚙️ Cấu hình environment (.env)..."
+cat > .env << EOF
 # Django Configuration
-SECRET_KEY=django-insecure-your-secret-key-here
+SECRET_KEY=tIkg6sBSU6ICcUO9LCoK1ET-9s3TZBM6wkCNKWEpJGy4bfm-1ocGd1fkaNxfcnjnugU
 DEBUG=False
-ALLOWED_HOSTS=ec2-172-31-12-202.compute.amazonaws.com,localhost,127.0.0.1
+ALLOWED_HOSTS=3.27.160.138,localhost,127.0.0.1
 
 # Database Configuration
 DB_NAME=spotify_chat_db
@@ -42,30 +43,26 @@ DB_PORT=5432
 # Media Storage
 MEDIA_URL=/media/
 MEDIA_ROOT=$APP_DIR/media/
+EOF
 
-# JWT Settings
-JWT_EXPIRATION_DELTA=7
-EOL
+# 5. Cấu hình PostgreSQL
+echo "🗃️ Cấu hình PostgreSQL..."
+sudo -u postgres psql -c "CREATE DATABASE spotify_chat_db;" || echo "⚠️ Database đã tồn tại"
+sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '123456';" || echo "⚠️ Đã thiết lập mật khẩu"
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE spotify_chat_db TO postgres;" || echo "⚠️ Đã cấp quyền"
 
-# 5. Tạo database
-echo "Cấu hình database..."
-sudo -u postgres psql -c "CREATE DATABASE spotify_chat_db;" || echo "Database đã tồn tại"
-sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '123456';" || echo "Đã thiết lập mật khẩu"
-sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE spotify_chat_db TO postgres;" || echo "Đã cấp quyền"
-
-# 6. Tạo thư mục cần thiết
-echo "Tạo các thư mục cần thiết..."
+# 6. Tạo các thư mục cần thiết
+echo "📂 Tạo thư mục static, media, logs..."
 mkdir -p $APP_DIR/media $APP_DIR/static $APP_DIR/logs
 
-# 7. Chạy migrations và collectstatic
-echo "Chạy migrations và collectstatic..."
+# 7. Migrate & Collect Static
+echo "⚙️ Migrate và collectstatic..."
 python manage.py migrate
 python manage.py collectstatic --noinput
 
-# 8. Cấu hình Gunicorn
-echo "Cấu hình Gunicorn..."
-cat > $APP_DIR/gunicorn.conf.py << EOL
-# Gunicorn configuration
+# 8. Gunicorn config
+echo "📝 Tạo cấu hình Gunicorn..."
+cat > $APP_DIR/gunicorn.conf.py << EOF
 bind = "127.0.0.1:8000"
 workers = 3
 timeout = 120
@@ -73,11 +70,11 @@ accesslog = "$APP_DIR/logs/gunicorn-access.log"
 errorlog = "$APP_DIR/logs/gunicorn-error.log"
 capture_output = True
 loglevel = "info"
-EOL
+EOF
 
-# 9. Cấu hình Supervisor
-echo "Cấu hình Supervisor..."
-cat > spotify-chat.conf << EOL
+# 9. Supervisor config
+echo "🧩 Cấu hình Supervisor..."
+cat > spotify-chat.conf << EOF
 [program:spotify-chat]
 command=$APP_DIR/venv/bin/gunicorn -c $APP_DIR/gunicorn.conf.py backend.wsgi:application
 directory=$APP_DIR
@@ -99,15 +96,15 @@ redirect_stderr=true
 stdout_logfile=$APP_DIR/logs/daphne-stdout.log
 stderr_logfile=$APP_DIR/logs/daphne-stderr.log
 environment=PYTHONUNBUFFERED=1
-EOL
+EOF
 sudo mv spotify-chat.conf /etc/supervisor/conf.d/
 
-# 10. Cấu hình Nginx
-echo "Cấu hình Nginx..."
-cat > spotify-chat-nginx << EOL
+# 10. Nginx config
+echo "🌐 Tạo cấu hình Nginx..."
+cat > spotify-chat-nginx << EOF
 server {
-    listen 80;
-    server_name ec2-172-31-12-202.compute.amazonaws.com;
+    listen 80 default_server;
+    server_name 3.27.160.138;
 
     location = /favicon.ico { 
         access_log off; 
@@ -139,19 +136,20 @@ server {
         proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
-EOL
+EOF
 sudo mv spotify-chat-nginx /etc/nginx/sites-available/spotify-chat
-
-# 11. Kích hoạt Nginx site
-echo "Kích hoạt cấu hình Nginx..."
 sudo ln -sf /etc/nginx/sites-available/spotify-chat /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# 11. Reload Nginx
+echo "🔁 Restart Nginx..."
 sudo nginx -t
 sudo systemctl restart nginx
 
-# 12. Khởi động Supervisor
-echo "Khởi động Supervisor..."
+# 12. Restart Supervisor
+echo "🔁 Khởi động lại Supervisor..."
 sudo supervisorctl reread
 sudo supervisorctl update
 sudo supervisorctl restart all
 
-echo "Deployment hoàn tất! Truy cập ứng dụng tại: http://ec2-172-31-12-202.compute.amazonaws.com" 
+echo "✅ Deployment hoàn tất! Truy cập tại: http://3.27.160.138"
