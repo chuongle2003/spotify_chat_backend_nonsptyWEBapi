@@ -4,7 +4,7 @@ set -e  # Dừng nếu có lỗi
 
 echo "🔄 Bắt đầu quá trình cập nhật ứng dụng..."
 
-APP_DIR=/home/ubuntu/spotify-chat-backend
+APP_DIR=/home/ubuntu/spotify_chat_backend_nonsptyWEBapi
 
 # 1. Vào thư mục project
 cd $APP_DIR
