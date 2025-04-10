@@ -16,3 +16,5 @@ twisted==24.11.0
 autobahn==24.4.2
 pyOpenSSL==25.0.0
 service-identity==24.2.0
+channels_redis==4.1.0
+gunicorn==21.2.0

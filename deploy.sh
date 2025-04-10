@@ -8,7 +8,7 @@ echo "Bắt đầu quá trình deployment..."
 # 1. Cài đặt các gói cần thiết
 echo "Cài đặt các gói cần thiết..."
 sudo apt update
-sudo apt install -y python3-pip python3-dev python3-venv nginx postgresql postgresql-contrib supervisor
+sudo apt install -y python3-pip python3-dev python3-venv nginx postgresql postgresql-contrib supervisor redis-server
 
 # 2. Tạo thư mục ứng dụng
 echo "Tạo thư mục ứng dụng..."
