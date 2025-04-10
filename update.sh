@@ -15,7 +15,15 @@ git pull origin main
 
 # 3. Kích hoạt môi trường ảo
 echo "🐍 Kích hoạt môi trường Python..."
-source venv/bin/activate
+if [ ! -d "venv" ]; then
+    echo "⚠️ Môi trường ảo chưa có, đang tạo..."
+    python3 -m venv venv
+    source venv/bin/activate
+    pip install --upgrade pip
+    pip install -r requirements.txt
+else
+    source venv/bin/activate
+fi
 
 # 4. Cài thêm packages mới (nếu có)
 echo "📦 Cài thêm dependencies (nếu có)..."
