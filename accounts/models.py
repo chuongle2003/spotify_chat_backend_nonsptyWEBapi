@@ -2,9 +2,11 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 
 class User(AbstractUser):
+    email = models.EmailField(unique=True)
     avatar = models.ImageField(upload_to='avatars/', null=True, blank=True)
     bio = models.TextField(max_length=500, blank=True)
-    has_spotify = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
     
     # Thêm lại trường favorite_songs và các quan hệ khác đã xóa tạm thời
     favorite_songs = models.ManyToManyField('music.Song', related_name='favorited_by', blank=True)
@@ -25,10 +27,13 @@ class User(AbstractUser):
         verbose_name='user permissions',
     )
     
+    USERNAME_FIELD = 'email'
+    REQUIRED_FIELDS = ['username']
+
     class Meta:
         db_table = 'users'
         verbose_name = 'User'
         verbose_name_plural = 'Users'
         
     def __str__(self):
-        return self.username
+        return self.email

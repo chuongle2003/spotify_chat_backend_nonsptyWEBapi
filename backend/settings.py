@@ -39,7 +39,7 @@ INSTALLED_APPS = [
 # Di chuyển environ xuống đây
 import environ
 env = environ.Env()
-environ.Env.read_env()
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
@@ -61,15 +61,14 @@ AUTH_USER_MODEL = 'accounts.User'
 
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'music.middleware.SpotifyTokenMiddleware',
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -162,10 +161,6 @@ CHANNEL_LAYERS = {
     },
 }
 
-# Spotify Settings
-SPOTIFY_CLIENT_ID  = env('SPOTIFY_CLIENT_ID')
-SPOTIFY_CLIENT_SECRET = env('SPOTIFY_CLIENT_SECRET')
-SPOTIFY_REDIRECT_URI= env('SPOTIFY_REDIRECT_URI')
 
 # Cấu hình REST Framework
 REST_FRAMEWORK = {
@@ -196,12 +191,8 @@ SPECTACULAR_SETTINGS = {
     'SWAGGER_UI_SETTINGS': {
         'deepLinking': True,
         'persistAuthorization': True,
-    },
-    'SWAGGER_UI_OAUTH2_CONFIG': {
-        'clientId': SPOTIFY_CLIENT_ID,
-        'clientSecret': SPOTIFY_CLIENT_SECRET,
-        'realm': "spotify-chat",
-        'appName': "Spotify Chat API",
-        'useBasicAuthenticationWithAccessCodeGrant': True,
+        'displayOperationId': True,
+        'realm': "chat",
+        'appName': "Chat API",
     },
 }
