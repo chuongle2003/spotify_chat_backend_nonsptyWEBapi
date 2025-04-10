@@ -77,7 +77,7 @@ EOL
 
 # 9. Cấu hình Supervisor
 echo "Cấu hình Supervisor..."
-sudo cat > /etc/supervisor/conf.d/spotify-chat.conf << EOL
+cat > spotify-chat.conf << EOL
 [program:spotify-chat]
 command=$APP_DIR/venv/bin/gunicorn -c $APP_DIR/gunicorn.conf.py backend.wsgi:application
 directory=$APP_DIR
@@ -100,10 +100,11 @@ stdout_logfile=$APP_DIR/logs/daphne-stdout.log
 stderr_logfile=$APP_DIR/logs/daphne-stderr.log
 environment=PYTHONUNBUFFERED=1
 EOL
+sudo mv spotify-chat.conf /etc/supervisor/conf.d/
 
 # 10. Cấu hình Nginx
 echo "Cấu hình Nginx..."
-sudo cat > /etc/nginx/sites-available/spotify-chat << EOL
+cat > spotify-chat-nginx << EOL
 server {
     listen 80;
     server_name ec2-172-31-12-202.compute.amazonaws.com;
@@ -139,6 +140,7 @@ server {
     }
 }
 EOL
+sudo mv spotify-chat-nginx /etc/nginx/sites-available/spotify-chat
 
 # 11. Kích hoạt Nginx site
 echo "Kích hoạt cấu hình Nginx..."
