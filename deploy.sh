@@ -14,7 +14,9 @@ sudo apt install -y python3-pip python3-dev python3-venv nginx postgresql postgr
 APP_DIR=/home/ubuntu/spotify-chat-backend
 echo "📁 Tạo thư mục ứng dụng tại $APP_DIR..."
 mkdir -p $APP_DIR
-cp -r . $APP_DIR
+rsync -av --exclude='.git' ./ $APP_DIR/
+
+
 
 # 3. Thiết lập môi trường Python
 echo "🐍 Tạo môi trường ảo và cài dependencies..."
