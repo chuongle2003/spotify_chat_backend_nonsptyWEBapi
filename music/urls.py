@@ -14,10 +14,6 @@ router.register(r'ratings', views.RatingViewSet)
 urlpatterns = [
     path('', include(router.urls)),
     
-    # Authentication URLs
-    path('register/', views.RegisterView.as_view(), name='register'),
-    path('profile/', views.UserProfileView.as_view(), name='user-profile'),
-    
     # Public URLs
     path('public/playlists/', views.PublicPlaylistView.as_view(), name='public-playlists'),
     path('public/search/', views.PublicSearchView.as_view(), name='public-search'),

@@ -1,9 +1,10 @@
 from django.shortcuts import render
-from rest_framework import viewsets, status, permissions
+from rest_framework import viewsets, status, permissions, generics
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
 from .models import User
-from .serializers import UserSerializer, UserRegistrationSerializer
+from .serializers import UserSerializer, UserRegistrationSerializer, PublicUserSerializer
 
 # Create your views here.
 
@@ -44,3 +45,9 @@ class UserViewSet(viewsets.ModelViewSet):
         
         user.following.remove(user_to_unfollow)
         return Response(status=status.HTTP_200_OK)
+
+# Thêm APIView mới để xem danh sách user mà không cần xác thực
+class PublicUserListView(generics.ListAPIView):
+    queryset = User.objects.all()
+    serializer_class = PublicUserSerializer
+    permission_classes = [AllowAny]

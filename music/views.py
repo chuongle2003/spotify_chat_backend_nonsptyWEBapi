@@ -8,8 +8,7 @@ from rest_framework import status, permissions, viewsets, generics
 from .models import Playlist, Song, Album, Genre, Rating, Comment, SongPlayHistory, SearchHistory
 from .serializers import (
     PlaylistSerializer, SongSerializer, AlbumSerializer, GenreSerializer, 
-    RatingSerializer, CommentSerializer, UserSerializer, UserProfileSerializer,
-    SongPlayHistorySerializer, SearchHistorySerializer
+    RatingSerializer, CommentSerializer, SongPlayHistorySerializer, SearchHistorySerializer
 )
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -20,27 +19,6 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.request import Request
 
 User = get_user_model()
-
-# Các view không liên quan đến Spotify
-
-class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [AllowAny]
-    
-    def perform_create(self, serializer):
-        password = self.request.data.get('password')  # type: ignore
-        user = serializer.save()
-        user.set_password(password)
-        user.save()
-        return user
-
-class UserProfileView(generics.RetrieveUpdateAPIView):
-    serializer_class = UserProfileSerializer
-    permission_classes = [IsAuthenticated]
-    
-    def get_object(self):
-        return self.request.user
 
 # Các view cơ bản
 class PublicPlaylistView(APIView):
@@ -87,7 +65,6 @@ class BasicUserFeatures(APIView):
         return Response({
             'my_playlists': reverse('user-playlists'),
             'create_playlist': reverse('create-playlist'),
-            'profile': reverse('user-profile'),
             'upload': reverse('song-upload'),
             'library': reverse('user-library'),
             'search': reverse('search'),
