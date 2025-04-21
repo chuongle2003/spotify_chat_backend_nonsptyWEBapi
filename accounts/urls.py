@@ -9,6 +9,12 @@ urlpatterns = [
     # User management
     path('', include(router.urls)),
     
+    # Authentication
+    path('auth/', include([
+        path('register/', views.RegisterView.as_view(), name='register'),
+        path('logout/', views.LogoutView.as_view(), name='logout'),
+    ])),
+    
     # Public endpoints không cần xác thực
     path('public/users/', views.PublicUserListView.as_view(), name='public-users'),
     
