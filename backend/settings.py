@@ -154,6 +154,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://ec2-172-31-12-202.compute.amazonaws.com",
     "http://3.27.160.138",
     "http://127.0.0.1:8000",
+    "http://spotifybackend.shop",
+    "https://spotifybackend.shop",
+    "http://www.spotifybackend.shop",
+    "https://www.spotifybackend.shop",
 ]
 
 ASGI_APPLICATION = 'backend.asgi.application'
