@@ -60,7 +60,7 @@
                                     "value": "application/json"
                                 }
                             ],
-                            "body": "{\n    \"access\": \"your.jwt.token\",\n    \"refresh\": \"your.refresh.token\",\n    \"user\": {\n        \"id\": 1,\n        \"username\": \"admin\",\n        \"email\": \"admin@example.com\",\n        \"first_name\": \"Admin\",\n        \"last_name\": \"User\",\n        \"avatar\": null,\n        \"bio\": \"\",\n        \"is_admin\": true,\n        \"has_admin_access\": true\n    }\n}"
+                            "body": "{\n    \"access\": \"your.jwt.token\",\n    \"refresh\": \"your.refresh.token\",\n    \"user\": {\n        \"id\": 1,\n        \"username\": \"admin\",\n        \"email\": \"admin@example.com\",\n        \"first_name\": \"Admin\",\n        \"last_name\": \"User\",\n        \"avatar\": null,\n        \"bio\": \"\",\n        \"is_admin\": true\n    }\n}"
                         },
                         {
                             "name": "Login Success - Regular User",
@@ -82,7 +82,7 @@
                                     "value": "application/json"
                                 }
                             ],
-                            "body": "{\n    \"access\": \"your.jwt.token\",\n    \"refresh\": \"your.refresh.token\",\n    \"user\": {\n        \"id\": 2,\n        \"username\": \"user\",\n        \"email\": \"user@example.com\",\n        \"first_name\": \"Regular\",\n        \"last_name\": \"User\",\n        \"avatar\": null,\n        \"bio\": \"\",\n        \"is_admin\": false,\n        \"has_admin_access\": false\n    }\n}"
+                            "body": "{\n    \"access\": \"your.jwt.token\",\n    \"refresh\": \"your.refresh.token\",\n    \"user\": {\n        \"id\": 2,\n        \"username\": \"user\",\n        \"email\": \"user@example.com\",\n        \"first_name\": \"Regular\",\n        \"last_name\": \"User\",\n        \"avatar\": null,\n        \"bio\": \"\",\n        \"is_admin\": false\n    }\n}"
                         }
                     ],
                     "event": [
@@ -100,7 +100,6 @@
                                     "    pm.expect(jsonData).to.have.property('refresh');",
                                     "    pm.expect(jsonData).to.have.property('user');",
                                     "    pm.expect(jsonData.user).to.have.property('is_admin');",
-                                    "    pm.expect(jsonData.user).to.have.property('has_admin_access');",
                                     "});",
                                     "if (jsonData.access) {",
                                     "    pm.environment.set(\"token\", jsonData.access);",
@@ -110,7 +109,7 @@
                                     "}",
                                     "if (jsonData.user && jsonData.user.id) {",
                                     "    pm.environment.set(\"user_id\", jsonData.user.id);",
-                                    "    pm.environment.set(\"is_admin\", jsonData.user.has_admin_access);",
+                                    "    pm.environment.set(\"is_admin\", jsonData.user.is_admin);",
                                     "}"
                                 ]
                             }
@@ -277,7 +276,7 @@
                                             "value": "application/json"
                                         }
                                     ],
-                                    "body": "{\n    \"id\": 3,\n    \"username\": \"newuser\",\n    \"email\": \"newuser@example.com\",\n    \"first_name\": \"New\",\n    \"last_name\": \"User\",\n    \"avatar\": null,\n    \"bio\": \"Music lover\",\n    \"is_admin\": false,\n    \"has_admin_access\": false\n}"
+                                    "body": "{\n    \"id\": 3,\n    \"username\": \"newuser\",\n    \"email\": \"newuser@example.com\",\n    \"first_name\": \"New\",\n    \"last_name\": \"User\",\n    \"avatar\": null,\n    \"bio\": \"Music lover\",\n    \"is_admin\": false\n}"
                                 }
                             ]
                         }
@@ -589,7 +588,7 @@
                                         ""
                                     ]
                                 },
-                                "description": "Tải lên bài hát mới (yêu cầu quyền Content Manager)"
+                                "description": "Tải lên bài hát mới (yêu cầu quyền Admin)"
                             },
                             "response": [],
                             "event": [

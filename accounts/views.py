@@ -10,11 +10,7 @@ from django.core.exceptions import ValidationError
 from .models import User
 from .serializers import UserSerializer, UserRegistrationSerializer, PublicUserSerializer, AdminUserSerializer, CompleteUserSerializer, CustomTokenObtainPairSerializer
 from rest_framework.views import APIView
-from .permissions import (
-    IsAdminUser, IsStaffUser, IsOwnerOrReadOnly, 
-    IsUserManager, IsContentManager, IsPlaylistManager,
-    IsPlaylistOwnerOrReadOnly, ReadOnly
-)
+from .permissions import IsAdminUser, IsOwnerOrReadOnly, ReadOnly
 import logging
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -31,6 +27,8 @@ class UserViewSet(viewsets.ModelViewSet):
             return [permissions.AllowAny()]
         elif self.action in ['update', 'partial_update', 'destroy']:
             return [IsOwnerOrReadOnly()]
+        elif self.action == 'list':
+            return [IsAdminUser()]
         return [permissions.IsAuthenticated()]
     
     def get_serializer_class(self):
@@ -62,20 +60,15 @@ class UserViewSet(viewsets.ModelViewSet):
         user.following.remove(user_to_unfollow)
         return Response({'status': 'Successfully unfollowed user'}, status=status.HTTP_200_OK)
 
-class UserManagementViewSet(viewsets.ModelViewSet):
+class AdminViewSet(viewsets.ModelViewSet):
     """
-    ViewSet dành cho quản lý người dùng
+    ViewSet for admin-only operations on users
     """
     queryset = User.objects.all()
     serializer_class = AdminUserSerializer
-    permission_classes = [IsUserManager]
+    permission_classes = [IsAdminUser]
     filter_backends = [filters.SearchFilter]
     search_fields = ['username', 'email', 'first_name', 'last_name']
-    
-    def get_serializer_class(self):
-        if self.action == 'complete':
-            return CompleteUserSerializer
-        return AdminUserSerializer
     
     @action(detail=True, methods=['get'])
     def complete(self, request, pk=None):
@@ -96,83 +89,15 @@ class UserManagementViewSet(viewsets.ModelViewSet):
         return Response({'status': f'User {action}'})
     
     @action(detail=True, methods=['post'])
-    def toggle_staff(self, request, pk=None):
-        if not request.user.is_superuser:
-            return Response(
-                {'error': 'Only superusers can change staff status'}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-            
+    def toggle_admin(self, request, pk=None):
         user = self.get_object()
-        user.is_staff = not user.is_staff
+        user.is_admin = not user.is_admin
         user.save()
         
-        action = "made staff" if user.is_staff else "removed from staff"
+        action = "granted admin access" if user.is_admin else "removed admin access"
         logger.info(f"User {user.username} {action} by {request.user.username}")
         
         return Response({'status': f'User {action}'})
-    
-    @action(detail=True, methods=['post'])
-    def set_permissions(self, request, pk=None):
-        if not request.user.is_superuser:
-            return Response(
-                {'error': 'Only superusers can change permissions'}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-            
-        user = self.get_object()
-        
-        # Update user permissions
-        user.can_manage_users = request.data.get('can_manage_users', user.can_manage_users)
-        user.can_manage_content = request.data.get('can_manage_content', user.can_manage_content)
-        user.can_manage_playlists = request.data.get('can_manage_playlists', user.can_manage_playlists)
-        
-        user.save()
-        logger.info(f"Permissions updated for {user.username} by {request.user.username}")
-        
-        return Response({'status': 'Permissions updated'})
-
-class AdminViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for admin-only operations on users
-    """
-    queryset = User.objects.all()
-    serializer_class = AdminUserSerializer  # Changed to AdminUserSerializer to include more details
-    permission_classes = [IsAdminUser]
-    
-    @action(detail=True, methods=['post'])
-    def toggle_staff_status(self, request, pk=None):
-        user = self.get_object()
-        user.is_staff = not user.is_staff
-        user.save()
-        return Response({'status': 'staff status updated'})
-    
-    @action(detail=True, methods=['post'])
-    def deactivate_user(self, request, pk=None):
-        user = self.get_object()
-        user.is_active = False
-        user.save()
-        return Response({'status': 'user deactivated'})
-
-class ContentManagementViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet cho quản lý nội dung (bài hát, album)
-    """
-    permission_classes = [IsContentManager]
-    
-    # Implement in music app - this is a placeholder
-    def get_queryset(self):
-        return None  # Will be implemented in music app
-
-class PlaylistManagementViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet cho quản lý playlist công cộng
-    """
-    permission_classes = [IsPlaylistManager]
-    
-    # Implement in music app - this is a placeholder
-    def get_queryset(self):
-        return None  # Will be implemented in music app
 
 # Thêm APIView mới để xem danh sách user mà không cần xác thực
 class PublicUserListView(generics.ListAPIView):

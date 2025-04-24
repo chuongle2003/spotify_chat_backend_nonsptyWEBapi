@@ -53,29 +53,17 @@ class PermissionMiddleware:
         
     def _check_permissions(self, request):
         """
-        Kiểm tra quyền truy cập
+        Kiểm tra quyền truy cập đơn giản hóa
         """
         user = request.user
         path = request.path
         
         # Admin can access everything
-        if user.is_superuser:
+        if user.is_admin:
             return True
             
-        # Check for admin URLs
-        if 'admin' in path and not user.is_staff:
-            return False
-            
-        # Check for user management endpoints
-        if 'user-management' in path and not user.is_user_manager:
-            return False
-            
-        # Check for content management endpoints
-        if 'content' in path and not user.is_content_manager:
-            return False
-            
-        # Check for playlist management endpoints
-        if 'playlist-management' in path and not user.is_playlist_manager:
+        # Check for admin URLs - non-admin users cannot access admin routes
+        if 'admin' in path and not user.is_admin:
             return False
             
         # For all other endpoints, let DRF permission classes handle it

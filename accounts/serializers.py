@@ -28,8 +28,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
                 'last_name': getattr(user, 'last_name', ''),
                 'avatar': avatar_url,
                 'bio': getattr(user, 'bio', ''),
-                'is_admin': getattr(user, 'is_admin', False),
-                'has_admin_access': getattr(user, 'has_admin_access', False)
+                'is_admin': getattr(user, 'is_admin', False)
             }
             data['user'] = user_data
         
@@ -37,12 +36,11 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     is_admin = serializers.BooleanField(read_only=True)
-    has_admin_access = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'first_name', 'last_name', 
-                 'avatar', 'bio', 'is_admin', 'has_admin_access')
+                 'avatar', 'bio', 'is_admin')
         extra_kwargs = {'password': {'write_only': True}}
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -51,7 +49,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'email', 'password', 'first_name', 
-                 'last_name', 'avatar', 'bio', 'is_admin')
+                 'last_name', 'avatar', 'bio')
     
     def create(self, validated_data):
         password = validated_data.pop('password')
@@ -72,13 +70,12 @@ class AdminUserSerializer(serializers.ModelSerializer):
     """Serializer cho việc quản lý người dùng."""
     followers_count = serializers.SerializerMethodField()
     following_count = serializers.SerializerMethodField()
-    has_admin_access = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = User
         fields = (
             'id', 'username', 'email', 'first_name', 'last_name', 
-            'avatar', 'bio', 'is_active', 'is_admin', 'has_admin_access',
+            'avatar', 'bio', 'is_active', 'is_admin',
             'date_joined', 'last_login', 'followers_count', 'following_count'
         )
         read_only_fields = ('date_joined', 'last_login')
@@ -105,13 +102,12 @@ class CompleteUserSerializer(serializers.ModelSerializer):
     favorite_songs = serializers.SerializerMethodField()
     playlists = serializers.SerializerMethodField()
     activities = serializers.SerializerMethodField()
-    has_admin_access = serializers.BooleanField(read_only=True)
     
     class Meta:
         model = User
         fields = (
             'id', 'username', 'email', 'first_name', 'last_name', 
-            'avatar', 'bio', 'is_active', 'is_admin', 'has_admin_access',
+            'avatar', 'bio', 'is_active', 'is_admin',
             'date_joined', 'last_login', 'followers_count', 'following_count', 
             'followers', 'following', 'favorite_songs', 'playlists', 
             'activities', 'created_at', 'updated_at'

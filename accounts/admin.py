@@ -9,7 +9,7 @@ class CustomUserAdmin(UserAdmin):
     search_fields = ('email', 'username')
     ordering = ('email',)
     
-    # Tùy chỉnh fieldsets để thêm role và loại bỏ is_staff/is_superuser
+    # Tùy chỉnh fieldsets để tập trung vào is_admin
     fieldsets = (
         (None, {'fields': ('email', 'password')}),
         ('Personal info', {'fields': ('username', 'first_name', 'last_name', 'avatar', 'bio')}),
@@ -17,7 +17,7 @@ class CustomUserAdmin(UserAdmin):
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
     
-    # Tùy chỉnh add_fieldsets để thêm role và loại bỏ is_staff/is_superuser
+    # Tùy chỉnh add_fieldsets
     add_fieldsets = (
         (None, {
             'classes': ('wide',),

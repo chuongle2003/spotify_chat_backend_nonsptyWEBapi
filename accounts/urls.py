@@ -6,8 +6,6 @@ from . import views
 router = DefaultRouter()
 router.register(r'users', views.UserViewSet)
 router.register(r'admin/users', views.AdminViewSet)
-# Đổi URL pattern từ 'user-management' sang 'management/users' để nhất quán hơn
-router.register(r'management/users', views.UserManagementViewSet, basename='user-management')
 
 urlpatterns = [
     # Bao gồm tất cả router URLs

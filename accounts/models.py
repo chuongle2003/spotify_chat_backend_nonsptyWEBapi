@@ -12,7 +12,7 @@ class User(AbstractUser):
     favorite_songs = models.ManyToManyField('music.Song', related_name='favorited_by', blank=True)
     following = models.ManyToManyField('self', symmetrical=False, related_name='followers', blank=True)
     
-    # Permissions - Simplified to just admin and regular user
+    # Chỉ còn 1 quyền duy nhất: admin hoặc không phải admin
     is_admin = models.BooleanField(default=False, verbose_name='Is Admin User')
     
     groups = models.ManyToManyField(
