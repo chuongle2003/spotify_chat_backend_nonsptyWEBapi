@@ -1,0 +1,63 @@
+{
+    "id": "a7b2d7e0-9f3d-4b8c-b8d7-e09f3d5b8c1a",
+    "name": "Spotify Chat API Environment",
+    "values": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000",
+            "type": "default",
+            "enabled": true
+        },
+        {
+            "key": "token",
+            "value": "",
+            "type": "secret",
+            "enabled": true
+        },
+        {
+            "key": "refresh_token",
+            "value": "",
+            "type": "secret",
+            "enabled": true
+        },
+        {
+            "key": "user_id",
+            "value": "",
+            "type": "default",
+            "enabled": true
+        },
+        {
+            "key": "registered_user_id",
+            "value": "",
+            "type": "default",
+            "enabled": true
+        },
+        {
+            "key": "target_user_id",
+            "value": "",
+            "type": "default",
+            "enabled": true
+        },
+        {
+            "key": "song_id",
+            "value": "",
+            "type": "default",
+            "enabled": true
+        },
+        {
+            "key": "playlist_id",
+            "value": "",
+            "type": "default",
+            "enabled": true
+        },
+        {
+            "key": "recipient_id",
+            "value": "",
+            "type": "default",
+            "enabled": true
+        }
+    ],
+    "_postman_variable_scope": "environment",
+    "_postman_exported_at": "2023-11-10T10:00:00.000Z",
+    "_postman_exported_using": "Postman/10.19.0"
+}

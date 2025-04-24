@@ -1,0 +1,1057 @@
+{
+    "info": {
+        "_postman_id": "8e3d8767-5f2a-4b82-9e11-c8a4f7c3b123",
+        "name": "Spotify Chat API v1",
+        "description": "Collection cho API mới của Spotify Chat với cấu trúc URL cải tiến",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "Authentication",
+            "description": "Các endpoint xác thực người dùng",
+            "item": [
+                {
+                    "name": "Login - Get Token",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"securepassword\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/token/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "token",
+                                ""
+                            ]
+                        },
+                        "description": "Đăng nhập và lấy JWT token"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Response has access and refresh tokens\", function () {",
+                                    "    pm.expect(jsonData).to.have.property('access');",
+                                    "    pm.expect(jsonData).to.have.property('refresh');",
+                                    "});",
+                                    "if (jsonData.access) {",
+                                    "    pm.environment.set(\"token\", jsonData.access);",
+                                    "}",
+                                    "if (jsonData.refresh) {",
+                                    "    pm.environment.set(\"refresh_token\", jsonData.refresh);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Refresh Token",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/token/refresh/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "token",
+                                "refresh",
+                                ""
+                            ]
+                        },
+                        "description": "Làm mới token JWT"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Response has access token\", function () {",
+                                    "    pm.expect(jsonData).to.have.property('access');",
+                                    "});",
+                                    "if (jsonData.access) {",
+                                    "    pm.environment.set(\"token\", jsonData.access);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Logout",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"refresh\": \"{{refresh_token}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/auth/logout/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "auth",
+                                "logout",
+                                ""
+                            ]
+                        },
+                        "description": "Đăng xuất người dùng và vô hiệu hóa token"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "User Management",
+            "description": "Các endpoint quản lý người dùng",
+            "item": [
+                {
+                    "name": "Registration",
+                    "item": [
+                        {
+                            "name": "Register User",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"username\": \"newuser\",\n  \"email\": \"newuser@example.com\",\n  \"password\": \"securepassword\",\n  \"first_name\": \"New\",\n  \"last_name\": \"User\",\n  \"bio\": \"Music lover\"\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/accounts/auth/register/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "accounts",
+                                        "auth",
+                                        "register",
+                                        ""
+                                    ]
+                                },
+                                "description": "Đăng ký người dùng mới"
+                            },
+                            "response": [],
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "var jsonData = pm.response.json();",
+                                            "pm.test(\"Status code is 201\", function () {",
+                                            "    pm.response.to.have.status(201);",
+                                            "});",
+                                            "pm.test(\"Response has user ID\", function () {",
+                                            "    pm.expect(jsonData).to.have.property('id');",
+                                            "});",
+                                            "if (jsonData.id) {",
+                                            "    pm.environment.set(\"registered_user_id\", jsonData.id);",
+                                            "}"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Current User",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/users/me/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "users",
+                                "me",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy thông tin người dùng hiện tại"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "var jsonData = pm.response.json();",
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Response has user ID\", function () {",
+                                    "    pm.expect(jsonData).to.have.property('id');",
+                                    "});",
+                                    "if (jsonData.id) {",
+                                    "    pm.environment.set(\"user_id\", jsonData.id);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Public User List",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/public/users/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "public",
+                                "users",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy danh sách người dùng công khai"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Admin",
+            "description": "Các endpoint quản lý dành cho Admin",
+            "item": [
+                {
+                    "name": "List All Users",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/admin/users/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "admin",
+                                "users",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy danh sách tất cả người dùng (Admin only)"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Toggle Staff Status",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/management/users/{{target_user_id}}/toggle_staff/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "management",
+                                "users",
+                                "{{target_user_id}}",
+                                "toggle_staff",
+                                ""
+                            ]
+                        },
+                        "description": "Bật/tắt trạng thái Staff cho người dùng"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Set User Permissions",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"can_manage_users\": true,\n  \"can_manage_content\": true,\n  \"can_manage_playlists\": false\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/management/users/{{target_user_id}}/set_permissions/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "management",
+                                "users",
+                                "{{target_user_id}}",
+                                "set_permissions",
+                                ""
+                            ]
+                        },
+                        "description": "Thiết lập quyền cho người dùng staff"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Music Management",
+            "description": "Các endpoint quản lý âm nhạc",
+            "item": [
+                {
+                    "name": "Songs",
+                    "item": [
+                        {
+                            "name": "List Songs",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/songs/?page=1&page_size=10",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "songs",
+                                        ""
+                                    ],
+                                    "query": [
+                                        {
+                                            "key": "page",
+                                            "value": "1"
+                                        },
+                                        {
+                                            "key": "page_size",
+                                            "value": "10"
+                                        }
+                                    ]
+                                },
+                                "description": "Lấy danh sách bài hát"
+                            },
+                            "response": [],
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "pm.test(\"Status code is 200\", function () {",
+                                            "    pm.response.to.have.status(200);",
+                                            "});"
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Get Song Details",
+                            "request": {
+                                "method": "GET",
+                                "header": [],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/songs/{{song_id}}/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "songs",
+                                        "{{song_id}}",
+                                        ""
+                                    ]
+                                },
+                                "description": "Lấy thông tin chi tiết của bài hát"
+                            },
+                            "response": [],
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "pm.test(\"Status code is 200\", function () {",
+                                            "    pm.response.to.have.status(200);",
+                                            "});"
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Upload Song",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "formdata",
+                                    "formdata": [
+                                        {
+                                            "key": "title",
+                                            "value": "New Song",
+                                            "type": "text"
+                                        },
+                                        {
+                                            "key": "artist",
+                                            "value": "Artist Name",
+                                            "type": "text"
+                                        },
+                                        {
+                                            "key": "album",
+                                            "value": "Album Name",
+                                            "type": "text"
+                                        },
+                                        {
+                                            "key": "duration",
+                                            "value": "240",
+                                            "type": "text"
+                                        },
+                                        {
+                                            "key": "genre",
+                                            "value": "Pop",
+                                            "type": "text"
+                                        },
+                                        {
+                                            "key": "lyrics",
+                                            "value": "Song lyrics here...",
+                                            "type": "text"
+                                        },
+                                        {
+                                            "key": "audio_file",
+                                            "type": "file",
+                                            "src": ""
+                                        },
+                                        {
+                                            "key": "cover_image",
+                                            "type": "file",
+                                            "src": ""
+                                        }
+                                    ]
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/songs/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "songs",
+                                        ""
+                                    ]
+                                },
+                                "description": "Tải lên bài hát mới (yêu cầu quyền Content Manager)"
+                            },
+                            "response": [],
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "var jsonData = pm.response.json();",
+                                            "pm.test(\"Status code is 201\", function () {",
+                                            "    pm.response.to.have.status(201);",
+                                            "});",
+                                            "pm.test(\"Response has song ID\", function () {",
+                                            "    pm.expect(jsonData).to.have.property('id');",
+                                            "});",
+                                            "if (jsonData.id) {",
+                                            "    pm.environment.set(\"song_id\", jsonData.id);",
+                                            "}"
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Like Song",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/songs/{{song_id}}/like/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "songs",
+                                        "{{song_id}}",
+                                        "like",
+                                        ""
+                                    ]
+                                },
+                                "description": "Yêu thích bài hát"
+                            },
+                            "response": [],
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "pm.test(\"Status code is 200\", function () {",
+                                            "    pm.response.to.have.status(200);",
+                                            "});"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "name": "Playlists",
+                    "item": [
+                        {
+                            "name": "Create Playlist",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "formdata",
+                                    "formdata": [
+                                        {
+                                            "key": "name",
+                                            "value": "My Playlist",
+                                            "type": "text"
+                                        },
+                                        {
+                                            "key": "description",
+                                            "value": "A collection of my favorite songs",
+                                            "type": "text"
+                                        },
+                                        {
+                                            "key": "is_public",
+                                            "value": "true",
+                                            "type": "text"
+                                        },
+                                        {
+                                            "key": "cover_image",
+                                            "type": "file",
+                                            "src": ""
+                                        }
+                                    ]
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/playlists/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "playlists",
+                                        ""
+                                    ]
+                                },
+                                "description": "Tạo playlist mới"
+                            },
+                            "response": [],
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "var jsonData = pm.response.json();",
+                                            "pm.test(\"Status code is 201\", function () {",
+                                            "    pm.response.to.have.status(201);",
+                                            "});",
+                                            "pm.test(\"Response has playlist ID\", function () {",
+                                            "    pm.expect(jsonData).to.have.property('id');",
+                                            "});",
+                                            "if (jsonData.id) {",
+                                            "    pm.environment.set(\"playlist_id\", jsonData.id);",
+                                            "}"
+                                        ]
+                                    }
+                                }
+                            ]
+                        },
+                        {
+                            "name": "Add Song to Playlist",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"song_id\": {{song_id}}\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/playlists/{{playlist_id}}/add_song/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "playlists",
+                                        "{{playlist_id}}",
+                                        "add_song",
+                                        ""
+                                    ]
+                                },
+                                "description": "Thêm bài hát vào playlist"
+                            },
+                            "response": [],
+                            "event": [
+                                {
+                                    "listen": "test",
+                                    "script": {
+                                        "type": "text/javascript",
+                                        "exec": [
+                                            "pm.test(\"Status code is 200\", function () {",
+                                            "    pm.response.to.have.status(200);",
+                                            "});"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Chat",
+            "description": "Các endpoint quản lý chat",
+            "item": [
+                {
+                    "name": "List Conversations",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/chat/conversations/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "chat",
+                                "conversations",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy danh sách cuộc trò chuyện"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Get Messages",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/chat/conversations/{{recipient_id}}/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "chat",
+                                "conversations",
+                                "{{recipient_id}}",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy tin nhắn với người dùng khác"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Send Message",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"receiver_id\": {{recipient_id}},\n  \"content\": \"Hello, how are you?\",\n  \"message_type\": \"TEXT\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/chat/messages/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "chat",
+                                "messages",
+                                ""
+                            ]
+                        },
+                        "description": "Gửi tin nhắn mới"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status code is 201\", function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Share Song",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"receiver_id\": {{recipient_id}},\n  \"content\": \"Check out this song!\",\n  \"message_type\": \"SONG\",\n  \"shared_song_id\": {{song_id}}\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/chat/messages/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "chat",
+                                "messages",
+                                ""
+                            ]
+                        },
+                        "description": "Chia sẻ bài hát với người dùng khác"
+                    },
+                    "response": [],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status code is 201\", function () {",
+                                    "    pm.response.to.have.status(201);",
+                                    "});"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "event": [
+        {
+            "listen": "prerequest",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        },
+        {
+            "listen": "test",
+            "script": {
+                "type": "text/javascript",
+                "exec": [
+                    ""
+                ]
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000",
+            "type": "string"
+        },
+        {
+            "key": "token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "refresh_token",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "user_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "target_user_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "song_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "playlist_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "recipient_id",
+            "value": "",
+            "type": "string"
+        }
+    ]
+}

@@ -8,7 +8,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.core.exceptions import ValidationError
 from .models import User
-from .serializers import UserSerializer, UserRegistrationSerializer, PublicUserSerializer, AdminUserSerializer
+from .serializers import UserSerializer, UserRegistrationSerializer, PublicUserSerializer, AdminUserSerializer, CompleteUserSerializer
 from rest_framework.views import APIView
 from .permissions import (
     IsAdminUser, IsStaffUser, IsOwnerOrReadOnly, 
@@ -51,7 +51,7 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response({'error': 'You cannot follow yourself'}, status=status.HTTP_400_BAD_REQUEST)
         
         user.following.add(user_to_follow)
-        return Response(status=status.HTTP_200_OK)
+        return Response({'status': 'Successfully followed user'}, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=['post'])
     def unfollow(self, request, pk=None):
@@ -59,7 +59,7 @@ class UserViewSet(viewsets.ModelViewSet):
         user = request.user
         
         user.following.remove(user_to_unfollow)
-        return Response(status=status.HTTP_200_OK)
+        return Response({'status': 'Successfully unfollowed user'}, status=status.HTTP_200_OK)
 
 class UserManagementViewSet(viewsets.ModelViewSet):
     """
@@ -70,6 +70,18 @@ class UserManagementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsUserManager]
     filter_backends = [filters.SearchFilter]
     search_fields = ['username', 'email', 'first_name', 'last_name']
+    
+    def get_serializer_class(self):
+        if self.action == 'complete':
+            return CompleteUserSerializer
+        return AdminUserSerializer
+    
+    @action(detail=True, methods=['get'])
+    def complete(self, request, pk=None):
+        """Get all details for a user including related data"""
+        user = self.get_object()
+        serializer = CompleteUserSerializer(user)
+        return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
     def toggle_active(self, request, pk=None):
@@ -124,7 +136,7 @@ class AdminViewSet(viewsets.ModelViewSet):
     ViewSet for admin-only operations on users
     """
     queryset = User.objects.all()
-    serializer_class = UserSerializer
+    serializer_class = AdminUserSerializer  # Changed to AdminUserSerializer to include more details
     permission_classes = [IsAdminUser]
     
     @action(detail=True, methods=['post'])

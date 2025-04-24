@@ -2,26 +2,32 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
 
+# Đăng ký các viewsets với router để tạo URLs tự động
 router = DefaultRouter()
 router.register(r'users', views.UserViewSet)
 router.register(r'admin/users', views.AdminViewSet)
-router.register(r'user-management', views.UserManagementViewSet)
-# Content và Playlist management sẽ được đăng ký trong ứng dụng tương ứng
+# Đổi URL pattern từ 'user-management' sang 'management/users' để nhất quán hơn
+router.register(r'management/users', views.UserManagementViewSet, basename='user-management')
 
 urlpatterns = [
-    # User management
+    # Bao gồm tất cả router URLs
     path('', include(router.urls)),
     
-    # Authentication
+    # Authentication endpoints
     path('auth/', include([
         path('register/', views.RegisterView.as_view(), name='register'),
-        path('logout/', views.LogoutView.as_view(), name='logout'),
+        # LogoutView đã được chuyển lên /api/v1/auth/logout/ 
+        # nên không còn khai báo ở đây nữa
     ])),
     
-    # Public endpoints không cần xác thực
-    path('public/users/', views.PublicUserListView.as_view(), name='public-users'),
+    # Public endpoints - nhóm lại các endpoints công khai
+    path('public/', include([
+        path('users/', views.PublicUserListView.as_view(), name='public-users'),
+    ])),
     
-    # Additional endpoints can be organized here if needed:
-    # path('profile/', views.ProfileView.as_view(), name='profile'),
-    # path('settings/', views.SettingsView.as_view(), name='settings'),
+    # Thêm không gian cho các endpoints tương lai
+    # path('profile/', include([
+    #     path('settings/', views.ProfileSettingsView.as_view(), name='profile-settings'),
+    #     path('preferences/', views.ProfilePreferencesView.as_view(), name='profile-preferences'),
+    # ])),
 ] 
