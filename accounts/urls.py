@@ -4,6 +4,9 @@ from . import views
 
 router = DefaultRouter()
 router.register(r'users', views.UserViewSet)
+router.register(r'admin/users', views.AdminViewSet)
+router.register(r'user-management', views.UserManagementViewSet)
+# Content và Playlist management sẽ được đăng ký trong ứng dụng tương ứng
 
 urlpatterns = [
     # User management

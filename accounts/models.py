@@ -12,6 +12,11 @@ class User(AbstractUser):
     favorite_songs = models.ManyToManyField('music.Song', related_name='favorited_by', blank=True)
     following = models.ManyToManyField('self', symmetrical=False, related_name='followers', blank=True)
     
+    # Thêm các trường quyền
+    can_manage_users = models.BooleanField(default=False, verbose_name='Có thể quản lý người dùng')
+    can_manage_content = models.BooleanField(default=False, verbose_name='Có thể quản lý nội dung')
+    can_manage_playlists = models.BooleanField(default=False, verbose_name='Có thể quản lý playlist')
+    
     groups = models.ManyToManyField(
         'auth.Group',
         related_name='custom_users',
@@ -37,3 +42,15 @@ class User(AbstractUser):
         
     def __str__(self):
         return self.email
+        
+    @property
+    def is_user_manager(self):
+        return self.is_staff and self.can_manage_users
+        
+    @property
+    def is_content_manager(self):
+        return self.is_staff and self.can_manage_content
+        
+    @property
+    def is_playlist_manager(self):
+        return self.is_staff and self.can_manage_playlists
