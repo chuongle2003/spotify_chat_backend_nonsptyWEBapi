@@ -3,10 +3,13 @@ from rest_framework import viewsets, status, permissions, generics, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.core.exceptions import ValidationError
 from .models import User
 from .serializers import UserSerializer, UserRegistrationSerializer, PublicUserSerializer, AdminUserSerializer
 from rest_framework.views import APIView
-from rest_framework_simplejwt.tokens import RefreshToken
 from .permissions import (
     IsAdminUser, IsStaffUser, IsOwnerOrReadOnly, 
     IsUserManager, IsContentManager, IsPlaylistManager,
@@ -186,9 +189,11 @@ class RegisterView(generics.CreateAPIView):
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
+    authentication_classes = [JWTAuthentication]
 
     def post(self, request):
         try:
+            # Lấy refresh token từ request
             refresh_token = request.data.get('refresh')
             if not refresh_token:
                 return Response(
@@ -196,15 +201,40 @@ class LogoutView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            token = RefreshToken(refresh_token)
-            token.blacklist()  # Đánh dấu token đã sử dụng
-            
-            return Response(
-                {"message": "Successfully logged out"},
-                status=status.HTTP_200_OK
-            )
+            # Validate và blacklist token
+            try:
+                token = RefreshToken(refresh_token)
+                # Kiểm tra token có thuộc về user hiện tại không
+                if token.payload.get('user_id') != request.user.id:
+                    raise ValidationError("Token does not belong to current user")
+                
+                token.blacklist()
+                
+                # Log thông tin đăng xuất
+                logger.info(f"User {request.user.username} logged out successfully")
+                
+                return Response(
+                    {"message": "Successfully logged out"},
+                    status=status.HTTP_200_OK
+                )
+            except TokenError as te:
+                # Log lỗi token
+                logger.error(f"Invalid refresh token provided by user {request.user.username}: {str(te)}")
+                return Response(
+                    {"error": "Invalid or expired refresh token"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            except ValidationError as ve:
+                logger.error(f"Token validation error for user {request.user.username}: {str(ve)}")
+                return Response(
+                    {"error": str(ve)},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
         except Exception as e:
+            # Log lỗi không xác định
+            logger.error(f"Logout error for user {request.user.username}: {str(e)}")
             return Response(
-                {"error": "Invalid token"}, 
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "An unexpected error occurred"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
