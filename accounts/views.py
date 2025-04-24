@@ -8,7 +8,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.core.exceptions import ValidationError
 from .models import User
-from .serializers import UserSerializer, UserRegistrationSerializer, PublicUserSerializer, AdminUserSerializer, CompleteUserSerializer
+from .serializers import UserSerializer, UserRegistrationSerializer, PublicUserSerializer, AdminUserSerializer, CompleteUserSerializer, CustomTokenObtainPairSerializer
 from rest_framework.views import APIView
 from .permissions import (
     IsAdminUser, IsStaffUser, IsOwnerOrReadOnly, 
@@ -16,6 +16,7 @@ from .permissions import (
     IsPlaylistOwnerOrReadOnly, ReadOnly
 )
 import logging
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 logger = logging.getLogger(__name__)
 
@@ -250,3 +251,6 @@ class LogoutView(APIView):
                 {"error": "An unexpected error occurred"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class CustomTokenObtainPairView(TokenObtainPairView):
+    serializer_class = CustomTokenObtainPairSerializer

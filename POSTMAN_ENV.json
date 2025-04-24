@@ -27,8 +27,8 @@
             "enabled": true
         },
         {
-            "key": "registered_user_id",
-            "value": "",
+            "key": "is_admin",
+            "value": "false",
             "type": "default",
             "enabled": true
         },

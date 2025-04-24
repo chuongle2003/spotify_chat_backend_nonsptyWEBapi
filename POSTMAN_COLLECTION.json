@@ -39,7 +39,52 @@
                         },
                         "description": "Đăng nhập và lấy JWT token"
                     },
-                    "response": [],
+                    "response": [
+                        {
+                            "name": "Login Success - Admin",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"securepassword\"\n}"
+                                },
+                                "url": "{{base_url}}/api/v1/auth/token/"
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"access\": \"your.jwt.token\",\n    \"refresh\": \"your.refresh.token\",\n    \"user\": {\n        \"id\": 1,\n        \"username\": \"admin\",\n        \"email\": \"admin@example.com\",\n        \"first_name\": \"Admin\",\n        \"last_name\": \"User\",\n        \"avatar\": null,\n        \"bio\": \"\",\n        \"is_admin\": true,\n        \"has_admin_access\": true\n    }\n}"
+                        },
+                        {
+                            "name": "Login Success - Regular User",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"userpassword\"\n}"
+                                },
+                                "url": "{{base_url}}/api/v1/auth/token/"
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"access\": \"your.jwt.token\",\n    \"refresh\": \"your.refresh.token\",\n    \"user\": {\n        \"id\": 2,\n        \"username\": \"user\",\n        \"email\": \"user@example.com\",\n        \"first_name\": \"Regular\",\n        \"last_name\": \"User\",\n        \"avatar\": null,\n        \"bio\": \"\",\n        \"is_admin\": false,\n        \"has_admin_access\": false\n    }\n}"
+                        }
+                    ],
                     "event": [
                         {
                             "listen": "test",
@@ -53,12 +98,19 @@
                                     "pm.test(\"Response has access and refresh tokens\", function () {",
                                     "    pm.expect(jsonData).to.have.property('access');",
                                     "    pm.expect(jsonData).to.have.property('refresh');",
+                                    "    pm.expect(jsonData).to.have.property('user');",
+                                    "    pm.expect(jsonData.user).to.have.property('is_admin');",
+                                    "    pm.expect(jsonData.user).to.have.property('has_admin_access');",
                                     "});",
                                     "if (jsonData.access) {",
                                     "    pm.environment.set(\"token\", jsonData.access);",
                                     "}",
                                     "if (jsonData.refresh) {",
                                     "    pm.environment.set(\"refresh_token\", jsonData.refresh);",
+                                    "}",
+                                    "if (jsonData.user && jsonData.user.id) {",
+                                    "    pm.environment.set(\"user_id\", jsonData.user.id);",
+                                    "    pm.environment.set(\"is_admin\", jsonData.user.has_admin_access);",
                                     "}"
                                 ]
                             }
@@ -204,25 +256,28 @@
                                 },
                                 "description": "Đăng ký người dùng mới"
                             },
-                            "response": [],
-                            "event": [
+                            "response": [
                                 {
-                                    "listen": "test",
-                                    "script": {
-                                        "type": "text/javascript",
-                                        "exec": [
-                                            "var jsonData = pm.response.json();",
-                                            "pm.test(\"Status code is 201\", function () {",
-                                            "    pm.response.to.have.status(201);",
-                                            "});",
-                                            "pm.test(\"Response has user ID\", function () {",
-                                            "    pm.expect(jsonData).to.have.property('id');",
-                                            "});",
-                                            "if (jsonData.id) {",
-                                            "    pm.environment.set(\"registered_user_id\", jsonData.id);",
-                                            "}"
-                                        ]
-                                    }
+                                    "name": "Registration Success",
+                                    "originalRequest": {
+                                        "method": "POST",
+                                        "header": [],
+                                        "body": {
+                                            "mode": "raw",
+                                            "raw": "{\n  \"username\": \"newuser\",\n  \"email\": \"newuser@example.com\",\n  \"password\": \"securepassword\",\n  \"first_name\": \"New\",\n  \"last_name\": \"User\",\n  \"bio\": \"Music lover\"\n}"
+                                        },
+                                        "url": "{{base_url}}/api/v1/accounts/auth/register/"
+                                    },
+                                    "status": "Created",
+                                    "code": 201,
+                                    "_postman_previewlanguage": "json",
+                                    "header": [
+                                        {
+                                            "key": "Content-Type",
+                                            "value": "application/json"
+                                        }
+                                    ],
+                                    "body": "{\n    \"id\": 3,\n    \"username\": \"newuser\",\n    \"email\": \"newuser@example.com\",\n    \"first_name\": \"New\",\n    \"last_name\": \"User\",\n    \"avatar\": null,\n    \"bio\": \"Music lover\",\n    \"is_admin\": false,\n    \"has_admin_access\": false\n}"
                                 }
                             ]
                         }
@@ -344,23 +399,10 @@
                         },
                         "description": "Lấy danh sách tất cả người dùng (Admin only)"
                     },
-                    "response": [],
-                    "event": [
-                        {
-                            "listen": "test",
-                            "script": {
-                                "type": "text/javascript",
-                                "exec": [
-                                    "pm.test(\"Status code is 200\", function () {",
-                                    "    pm.response.to.have.status(200);",
-                                    "});"
-                                ]
-                            }
-                        }
-                    ]
+                    "response": []
                 },
                 {
-                    "name": "Toggle Staff Status",
+                    "name": "Toggle Admin Status",
                     "request": {
                         "method": "POST",
                         "header": [
@@ -370,7 +412,7 @@
                             }
                         ],
                         "url": {
-                            "raw": "{{base_url}}/api/v1/accounts/management/users/{{target_user_id}}/toggle_staff/",
+                            "raw": "{{base_url}}/api/v1/accounts/admin/users/{{target_user_id}}/toggle_admin/",
                             "host": [
                                 "{{base_url}}"
                             ],
@@ -378,80 +420,16 @@
                                 "api",
                                 "v1",
                                 "accounts",
-                                "management",
+                                "admin",
                                 "users",
                                 "{{target_user_id}}",
-                                "toggle_staff",
+                                "toggle_admin",
                                 ""
                             ]
                         },
-                        "description": "Bật/tắt trạng thái Staff cho người dùng"
+                        "description": "Bật/tắt quyền Admin cho người dùng"
                     },
-                    "response": [],
-                    "event": [
-                        {
-                            "listen": "test",
-                            "script": {
-                                "type": "text/javascript",
-                                "exec": [
-                                    "pm.test(\"Status code is 200\", function () {",
-                                    "    pm.response.to.have.status(200);",
-                                    "});"
-                                ]
-                            }
-                        }
-                    ]
-                },
-                {
-                    "name": "Set User Permissions",
-                    "request": {
-                        "method": "POST",
-                        "header": [
-                            {
-                                "key": "Authorization",
-                                "value": "Bearer {{token}}"
-                            },
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            }
-                        ],
-                        "body": {
-                            "mode": "raw",
-                            "raw": "{\n  \"can_manage_users\": true,\n  \"can_manage_content\": true,\n  \"can_manage_playlists\": false\n}"
-                        },
-                        "url": {
-                            "raw": "{{base_url}}/api/v1/accounts/management/users/{{target_user_id}}/set_permissions/",
-                            "host": [
-                                "{{base_url}}"
-                            ],
-                            "path": [
-                                "api",
-                                "v1",
-                                "accounts",
-                                "management",
-                                "users",
-                                "{{target_user_id}}",
-                                "set_permissions",
-                                ""
-                            ]
-                        },
-                        "description": "Thiết lập quyền cho người dùng staff"
-                    },
-                    "response": [],
-                    "event": [
-                        {
-                            "listen": "test",
-                            "script": {
-                                "type": "text/javascript",
-                                "exec": [
-                                    "pm.test(\"Status code is 200\", function () {",
-                                    "    pm.response.to.have.status(200);",
-                                    "});"
-                                ]
-                            }
-                        }
-                    ]
+                    "response": []
                 }
             ]
         },

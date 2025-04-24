@@ -8,14 +8,12 @@ class User(AbstractUser):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-    # Thêm lại trường favorite_songs và các quan hệ khác đã xóa tạm thời
+    # Relationships
     favorite_songs = models.ManyToManyField('music.Song', related_name='favorited_by', blank=True)
     following = models.ManyToManyField('self', symmetrical=False, related_name='followers', blank=True)
     
-    # Thêm các trường quyền
-    can_manage_users = models.BooleanField(default=False, verbose_name='Có thể quản lý người dùng')
-    can_manage_content = models.BooleanField(default=False, verbose_name='Có thể quản lý nội dung')
-    can_manage_playlists = models.BooleanField(default=False, verbose_name='Có thể quản lý playlist')
+    # Permissions - Simplified to just admin and regular user
+    is_admin = models.BooleanField(default=False, verbose_name='Is Admin User')
     
     groups = models.ManyToManyField(
         'auth.Group',
@@ -42,15 +40,18 @@ class User(AbstractUser):
         
     def __str__(self):
         return self.email
-        
+    
     @property
-    def is_user_manager(self):
-        return self.is_staff and self.can_manage_users
-        
-    @property
-    def is_content_manager(self):
-        return self.is_staff and self.can_manage_content
-        
-    @property
-    def is_playlist_manager(self):
-        return self.is_staff and self.can_manage_playlists
+    def has_admin_access(self):
+        """Check if user has admin access"""
+        return self.is_superuser or self.is_admin
+    
+    def save(self, *args, **kwargs):
+        if self.is_superuser:
+            # Nếu user là superuser, tự động set is_admin = True
+            self.is_admin = True
+            self.is_staff = True
+        elif self.is_admin:
+            # Nếu user là admin, tự động grant các quyền cần thiết
+            self.is_staff = True
+        super().save(*args, **kwargs)

@@ -18,15 +18,15 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
-from accounts.views import LogoutView  # Import LogoutView từ accounts
+from accounts.views import LogoutView, CustomTokenObtainPairView  # Import CustomTokenObtainPairView
 
 # Định nghĩa API v1 patterns
 api_v1_patterns = [
     # Auth endpoints - Tập trung endpoints xác thực
     path('auth/', include([
-        path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+        path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
         path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
         path('logout/', LogoutView.as_view(), name='logout'),
     ])),
@@ -47,7 +47,7 @@ urlpatterns = [
     # Legacy support - để duy trì tương thích ngược
     path('api/', include([
         # JWT Auth theo cấu trúc cũ
-        path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair_legacy'),
+        path('token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair_legacy'),
         path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh_legacy'),
         
         # Các modules
