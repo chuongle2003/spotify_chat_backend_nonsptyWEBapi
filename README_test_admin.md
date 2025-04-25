@@ -158,3 +158,122 @@ Use Postman collection runner to automate testing:
   python manage.py migrate
   ```
 - For token issues, verify the token hasn't expired and you're using the proper format in the Authorization header
+
+## Hướng dẫn Test Quyền Admin
+
+File này cung cấp hướng dẫn kiểm tra các quyền và chức năng dành cho Admin trong ứng dụng Spotify Chat API.
+
+### Chuẩn bị
+
+1. Đảm bảo API đã được khởi chạy (`python manage.py runserver`)
+2. Import collection và environment từ Postman
+3. Đăng nhập với tài khoản admin để lấy token
+
+### Kiểm tra quyền cơ bản
+
+#### Đăng nhập Admin
+
+1. Sử dụng request "Login - Get Token" với tài khoản admin
+2. Kiểm tra response có chứa trường `is_admin` với giá trị `true`
+3. Token sẽ được tự động lưu vào biến môi trường
+
+#### Truy cập API chỉ dành cho Admin
+
+1. Sử dụng request "List All Users"
+2. Kiểm tra status code là 200 và nhận được danh sách người dùng
+3. Đăng xuất và đăng nhập lại với tài khoản không phải admin
+4. Thử lại request "List All Users", kiểm tra status code là 403 (Forbidden)
+
+### Quản lý người dùng (Admin)
+
+#### Lấy danh sách người dùng
+
+1. Sử dụng request "List All Users"
+2. Kiểm tra danh sách người dùng đầy đủ thông tin
+
+#### Tạo người dùng mới
+
+1. Sử dụng request "Create User"
+2. Điền thông tin người dùng mới trong body
+3. Kiểm tra response có status code 201 và chứa thông tin người dùng mới
+4. Có thể tạo người dùng thường hoặc admin bằng cách đặt `is_admin: true`
+
+#### Xem thông tin chi tiết người dùng
+
+1. Lấy ID của người dùng từ danh sách
+2. Điền ID vào biến `target_user_id`
+3. Sử dụng request "Get User Details"
+4. Để xem thông tin chi tiết hơn bao gồm hoạt động, bài hát yêu thích, v.v., sử dụng request "Get User Complete Profile"
+
+#### Cập nhật thông tin người dùng
+
+1. Đặt `target_user_id` cho người dùng cần cập nhật
+2. Sử dụng request "Update User"
+3. Điền thông tin cần cập nhật trong body
+4. Kiểm tra response có status code 200 và thông tin đã được cập nhật
+
+#### Xóa người dùng
+
+1. Đặt `target_user_id` cho người dùng cần xóa
+2. Sử dụng request "Delete User"
+3. Kiểm tra status code là 204 (No Content)
+4. Thử lấy thông tin người dùng đã xóa để đảm bảo người dùng không còn tồn tại
+
+#### Thay đổi trạng thái kích hoạt của người dùng
+
+1. Đặt `target_user_id` cho người dùng cần thay đổi
+2. Sử dụng request "Toggle User Active Status"
+3. Kiểm tra response có thông báo về việc người dùng đã được kích hoạt hoặc vô hiệu hóa
+4. Kiểm tra lại trạng thái của người dùng
+
+#### Thay đổi quyền Admin
+
+1. Đặt `target_user_id` cho người dùng cần thay đổi
+2. Sử dụng request "Toggle Admin Status"
+3. Kiểm tra response có thông báo về việc cấp hoặc thu hồi quyền admin
+4. Kiểm tra lại trạng thái của người dùng
+
+### Chức năng quản lý nội dung (Admin)
+
+#### Tải lên bài hát mới
+
+1. Sử dụng request "Upload Song" trong thư mục Music Management
+2. Điền thông tin bài hát và đính kèm file audio và hình ảnh
+3. Kiểm tra response có status code 201 và chứa thông tin bài hát mới
+
+#### Chỉnh sửa bài hát
+
+1. Đăng nhập với tài khoản admin
+2. Lấy ID bài hát và đặt vào biến `song_id`
+3. Sử dụng request PUT với endpoint `/api/v1/music/songs/{song_id}/`
+4. Kiểm tra chỉ admin mới có thể chỉnh sửa bài hát
+
+#### Xóa bài hát
+
+1. Đăng nhập với tài khoản admin
+2. Lấy ID bài hát và đặt vào biến `song_id`
+3. Sử dụng request DELETE với endpoint `/api/v1/music/songs/{song_id}/`
+4. Kiểm tra chỉ admin mới có thể xóa bài hát
+
+### Kiểm tra phân quyền
+
+#### Thử truy cập API Admin với người dùng thường
+
+1. Đăng xuất và đăng nhập lại với tài khoản không phải admin
+2. Thử các request dành cho admin
+3. Kiểm tra tất cả đều trả về status code 403 (Forbidden)
+
+#### Đổi quyền cho người dùng
+
+1. Đăng nhập với tài khoản admin
+2. Đặt `target_user_id` cho một người dùng thường
+3. Sử dụng request "Toggle Admin Status"
+4. Đăng xuất và đăng nhập với tài khoản vừa được cấp quyền admin
+5. Kiểm tra các request dành cho admin đều hoạt động
+
+### Lưu ý về bảo mật
+
+- Đảm bảo chỉ admin mới có thể thực hiện các hành động quản trị
+- Kiểm tra kỹ lưỡng các API endpoint để đảm bảo không lộ thông tin nhạy cảm
+- API nên sử dụng HTTPS khi triển khai thực tế
+- Kiểm tra việc lưu trữ và sử dụng token JWT đúng cách

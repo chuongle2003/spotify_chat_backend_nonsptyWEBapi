@@ -8,7 +8,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.core.exceptions import ValidationError
 from .models import User
-from .serializers import UserSerializer, UserRegistrationSerializer, PublicUserSerializer, AdminUserSerializer, CompleteUserSerializer, CustomTokenObtainPairSerializer
+from .serializers import UserSerializer, UserRegistrationSerializer, PublicUserSerializer, AdminUserSerializer, CompleteUserSerializer, CustomTokenObtainPairSerializer, AdminUserCreateSerializer
 from rest_framework.views import APIView
 from .permissions import IsAdminUser, IsOwnerOrReadOnly, ReadOnly
 import logging
@@ -70,6 +70,11 @@ class AdminViewSet(viewsets.ModelViewSet):
     filter_backends = [filters.SearchFilter]
     search_fields = ['username', 'email', 'first_name', 'last_name']
     
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return AdminUserCreateSerializer
+        return AdminUserSerializer
+    
     @action(detail=True, methods=['get'])
     def complete(self, request, pk=None):
         """Get all details for a user including related data"""
@@ -98,6 +103,49 @@ class AdminViewSet(viewsets.ModelViewSet):
         logger.info(f"User {user.username} {action} by {request.user.username}")
         
         return Response({'status': f'User {action}'})
+    
+    def create(self, request, *args, **kwargs):
+        """Create a new user with admin privileges"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        
+        logger.info(f"New user {user.username} created by admin {request.user.username}")
+        
+        return Response(
+            AdminUserSerializer(user, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED
+        )
+    
+    def update(self, request, *args, **kwargs):
+        """Update a user's information"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        
+        logger.info(f"User {user.username} updated by admin {request.user.username}")
+        
+        return Response(serializer.data)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Delete a user"""
+        instance = self.get_object()
+        username = instance.username
+        
+        # Ngăn admin xóa chính mình
+        if instance == request.user:
+            return Response(
+                {"error": "You cannot delete your own account"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        self.perform_destroy(instance)
+        
+        logger.info(f"User {username} deleted by admin {request.user.username}")
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 # Thêm APIView mới để xem danh sách user mà không cần xác thực
 class PublicUserListView(generics.ListAPIView):

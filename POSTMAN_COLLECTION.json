@@ -401,6 +401,167 @@
                     "response": []
                 },
                 {
+                    "name": "Create User",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"username\": \"newuser\",\n  \"email\": \"newuser@example.com\",\n  \"password\": \"securepassword\",\n  \"first_name\": \"New\",\n  \"last_name\": \"User\",\n  \"bio\": \"Created by admin\",\n  \"is_admin\": false,\n  \"is_active\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/admin/users/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "admin",
+                                "users",
+                                ""
+                            ]
+                        },
+                        "description": "Tạo người dùng mới (Admin only)"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Update User",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"username\": \"updateduser\",\n  \"email\": \"updated@example.com\",\n  \"first_name\": \"Updated\",\n  \"last_name\": \"User\",\n  \"bio\": \"Updated by admin\",\n  \"is_active\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/admin/users/{{target_user_id}}/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "admin",
+                                "users",
+                                "{{target_user_id}}",
+                                ""
+                            ]
+                        },
+                        "description": "Cập nhật thông tin người dùng (Admin only)"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get User Details",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/admin/users/{{target_user_id}}/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "admin",
+                                "users",
+                                "{{target_user_id}}",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy thông tin chi tiết của người dùng (Admin only)"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get User Complete Profile",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/admin/users/{{target_user_id}}/complete/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "admin",
+                                "users",
+                                "{{target_user_id}}",
+                                "complete",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy thông tin hoàn chỉnh của người dùng bao gồm cả dữ liệu liên quan (Admin only)"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Delete User",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/admin/users/{{target_user_id}}/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "admin",
+                                "users",
+                                "{{target_user_id}}",
+                                ""
+                            ]
+                        },
+                        "description": "Xóa người dùng (Admin only)"
+                    },
+                    "response": []
+                },
+                {
                     "name": "Toggle Admin Status",
                     "request": {
                         "method": "POST",
@@ -427,6 +588,36 @@
                             ]
                         },
                         "description": "Bật/tắt quyền Admin cho người dùng"
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Toggle User Active Status",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/admin/users/{{target_user_id}}/toggle_active/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "admin",
+                                "users",
+                                "{{target_user_id}}",
+                                "toggle_active",
+                                ""
+                            ]
+                        },
+                        "description": "Bật/tắt trạng thái kích hoạt của người dùng"
                     },
                     "response": []
                 }

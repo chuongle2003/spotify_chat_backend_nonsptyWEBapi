@@ -58,6 +58,30 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         user.save()
         return user
 
+class AdminUserCreateSerializer(serializers.ModelSerializer):
+    """Serializer cho phép Admin tạo người dùng mới với các quyền cụ thể."""
+    password = serializers.CharField(write_only=True)
+    is_admin = serializers.BooleanField(required=False)
+    is_active = serializers.BooleanField(required=False)
+    
+    class Meta:
+        model = User
+        fields = ('id', 'username', 'email', 'password', 'first_name', 
+                 'last_name', 'avatar', 'bio', 'is_admin', 'is_active')
+    
+    def create(self, validated_data):
+        password = validated_data.pop('password')
+        # Đặt giá trị mặc định nếu không được cung cấp
+        if 'is_admin' not in validated_data:
+            validated_data['is_admin'] = False
+        if 'is_active' not in validated_data:
+            validated_data['is_active'] = True
+            
+        user = User(**validated_data)
+        user.set_password(password)
+        user.save()
+        return user
+
 class PublicUserSerializer(serializers.ModelSerializer):
     """Serializer cho việc hiển thị thông tin công khai của người dùng."""
     
