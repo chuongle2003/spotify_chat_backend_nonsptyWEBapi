@@ -237,7 +237,7 @@ SPECTACULAR_SETTINGS = {
 # Cấu hình Email
 # Mặc định sử dụng console backend cho development
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
-DEFAULT_FROM_EMAIL = 'noreply@spotifybackend.shop'
+DEFAULT_FROM_EMAIL = 'chuongle.nt1@gmail.com'
 
 # Cấu hình SMTP cho production - chỉ sử dụng khi có đầy đủ thông tin
 if not DEBUG:
