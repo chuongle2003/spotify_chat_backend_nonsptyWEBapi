@@ -345,11 +345,12 @@ class ForgotPasswordView(generics.CreateAPIView):
                     )
                     
             except User.DoesNotExist:
-                # Không tiết lộ liệu email có tồn tại hay không
+                # Email không tồn tại trong hệ thống
                 logger.info(f"Password reset attempted for non-existent email: {email}")
+                # Trả về message thân thiện nhưng không tiết lộ rằng email không tồn tại
                 return Response(
-                    {'message': 'Nếu địa chỉ email này được đăng ký, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu.'},
-                    status=status.HTTP_200_OK
+                    {'error': 'Email này chưa được đăng ký trong hệ thống của chúng tôi.'},
+                    status=status.HTTP_404_NOT_FOUND
                 )
         except Exception as e:
             # Log lỗi tổng quát

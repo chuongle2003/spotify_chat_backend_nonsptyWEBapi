@@ -11,6 +11,16 @@ UserModel = get_user_model()
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs: Dict[str, Any]) -> Dict[str, Any]:
+        # Validate email
+        email = attrs.get('email', '')
+        if not email.endswith('@gmail.com'):
+            raise serializers.ValidationError({"email": "Email phải là địa chỉ Gmail (@gmail.com)."})
+        
+        # Validate password
+        password = attrs.get('password', '')
+        if len(password) < 8:
+            raise serializers.ValidationError({"password": "Mật khẩu phải có ít nhất 8 ký tự."})
+        
         # Lấy token data từ parent class
         data: Dict[str, Any] = super().validate(attrs)
         
@@ -50,6 +60,22 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         model = User
         fields = ('id', 'username', 'email', 'password', 'first_name', 
                  'last_name', 'avatar', 'bio')
+    
+    def validate_email(self, value):
+        """
+        Kiểm tra email phải là địa chỉ Gmail.
+        """
+        if not value.endswith('@gmail.com'):
+            raise serializers.ValidationError("Email phải là địa chỉ Gmail (@gmail.com).")
+        return value
+    
+    def validate_password(self, value):
+        """
+        Kiểm tra mật khẩu có đủ độ dài và độ phức tạp không.
+        """
+        if len(value) < 8:
+            raise serializers.ValidationError("Mật khẩu phải có ít nhất 8 ký tự.")
+        return value
     
     def create(self, validated_data):
         password = validated_data.pop('password')
@@ -164,12 +190,46 @@ class CompleteUserSerializer(serializers.ModelSerializer):
 class ForgotPasswordSerializer(serializers.Serializer):
     """Serializer cho chức năng quên mật khẩu."""
     email = serializers.EmailField()
+    
+    def validate_email(self, value):
+        """
+        Kiểm tra email phải là gmail và tồn tại trong hệ thống.
+        """
+        if not value.endswith('@gmail.com'):
+            raise serializers.ValidationError("Email phải là địa chỉ Gmail (@gmail.com).")
+        
+        # Kiểm tra email có tồn tại trong database không
+        User = get_user_model()
+        try:
+            User.objects.get(email=value)
+        except User.DoesNotExist:
+            # Không tiết lộ liệu email tồn tại hay không vì lý do bảo mật
+            # Chúng ta sẽ xử lý trong view
+            pass
+            
+        return value
 
 class VerifyPasswordResetTokenSerializer(serializers.Serializer):
     """Serializer cho chức năng xác minh token reset mật khẩu."""
     email = serializers.EmailField()
     token = serializers.CharField(min_length=6, max_length=6)
     new_password = serializers.CharField(min_length=8, write_only=True)
+    
+    def validate_email(self, value):
+        """
+        Kiểm tra email phải là gmail và tồn tại trong hệ thống.
+        """
+        if not value.endswith('@gmail.com'):
+            raise serializers.ValidationError("Email phải là địa chỉ Gmail (@gmail.com).")
+        
+        # Kiểm tra email có tồn tại trong database không
+        User = get_user_model()
+        try:
+            User.objects.get(email=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Email không tồn tại trong hệ thống.")
+            
+        return value
     
     def validate_token(self, value):
         # Chỉ chấp nhận token có 6 ký tự số
