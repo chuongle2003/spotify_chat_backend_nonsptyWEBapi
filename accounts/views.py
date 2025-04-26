@@ -241,101 +241,122 @@ class ForgotPasswordView(generics.CreateAPIView):
     serializer_class = ForgotPasswordSerializer
     
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        email = serializer.validated_data.get('email')
         try:
-            user = User.objects.get(email=email)
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
             
-            # Generate reset token
-            token_obj = PasswordResetToken.generate_token(user)
-            
-            # Send email
-            subject = 'Yêu cầu đặt lại mật khẩu'
-            
-            # Tạo nội dung email
-            html_message = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Đặt lại mật khẩu</title>
-                <style>
-                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }}
-                    .container {{ padding: 20px; border: 1px solid #ddd; border-radius: 5px; }}
-                    .header {{ background-color: #1DB954; padding: 15px; color: white; text-align: center; border-radius: 5px 5px 0 0; }}
-                    .content {{ padding: 20px; }}
-                    .token {{ font-size: 28px; font-weight: bold; text-align: center; padding: 15px; margin: 20px 0; background-color: #f5f5f5; border-radius: 5px; letter-spacing: 5px; }}
-                    .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #777; }}
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <div class="header">
-                        <h1>Spotify Chat</h1>
-                    </div>
-                    <div class="content">
-                        <h2>Yêu cầu đặt lại mật khẩu</h2>
-                        <p>Xin chào,</p>
-                        <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại Spotify Chat.</p>
-                        <p>Mã xác nhận của bạn là:</p>
-                        <div class="token">{token_obj.token}</div>
-                        <p>Mã này sẽ hết hạn sau 15 phút.</p>
-                        <p>Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này hoặc liên hệ với bộ phận hỗ trợ của chúng tôi ngay lập tức.</p>
-                        <p>Trân trọng,<br>Đội ngũ Spotify Chat</p>
-                    </div>
-                    <div class="footer">
-                        <p>Email này được gửi tự động, vui lòng không trả lời.</p>
-                        <p>&copy; {timezone.now().year} Spotify Chat. All rights reserved.</p>
-                    </div>
-                </div>
-            </body>
-            </html>
-            """
-            
-            plain_message = strip_tags(html_message)
-            from_email = settings.DEFAULT_FROM_EMAIL
-            to_email = [user.email]
-            
+            email = serializer.validated_data.get('email')
             try:
-                send_mail(
-                    subject=subject,
-                    message=plain_message,
-                    from_email=from_email,
-                    recipient_list=to_email,
-                    html_message=html_message,
-                    fail_silently=False
-                )
-                logger.info(f"Password reset email sent to {user.email}")
+                user = User.objects.get(email=email)
+                
+                # Generate reset token
+                token_obj = PasswordResetToken.generate_token(user)
+                
+                # Trong môi trường phát triển, trả về token trực tiếp mà không gửi email
+                if settings.DEBUG:
+                    return Response(
+                        {
+                            'message': 'Mã xác nhận đã được gửi đến email của bạn (Development Mode).',
+                            'debug_token': token_obj.token
+                        },
+                        status=status.HTTP_200_OK
+                    )
+                
+                # Xử lý gửi email trong môi trường production
+                try:
+                    # Send email
+                    subject = 'Yêu cầu đặt lại mật khẩu'
+                    
+                    # Tạo nội dung email
+                    html_message = f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head>
+                        <meta charset="UTF-8">
+                        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                        <title>Đặt lại mật khẩu</title>
+                        <style>
+                            body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; }}
+                            .container {{ padding: 20px; border: 1px solid #ddd; border-radius: 5px; }}
+                            .header {{ background-color: #1DB954; padding: 15px; color: white; text-align: center; border-radius: 5px 5px 0 0; }}
+                            .content {{ padding: 20px; }}
+                            .token {{ font-size: 28px; font-weight: bold; text-align: center; padding: 15px; margin: 20px 0; background-color: #f5f5f5; border-radius: 5px; letter-spacing: 5px; }}
+                            .footer {{ text-align: center; margin-top: 20px; font-size: 12px; color: #777; }}
+                        </style>
+                    </head>
+                    <body>
+                        <div class="container">
+                            <div class="header">
+                                <h1>Spotify Chat</h1>
+                            </div>
+                            <div class="content">
+                                <h2>Yêu cầu đặt lại mật khẩu</h2>
+                                <p>Xin chào,</p>
+                                <p>Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản của bạn tại Spotify Chat.</p>
+                                <p>Mã xác nhận của bạn là:</p>
+                                <div class="token">{token_obj.token}</div>
+                                <p>Mã này sẽ hết hạn sau 15 phút.</p>
+                                <p>Nếu bạn không yêu cầu đặt lại mật khẩu, vui lòng bỏ qua email này hoặc liên hệ với bộ phận hỗ trợ của chúng tôi ngay lập tức.</p>
+                                <p>Trân trọng,<br>Đội ngũ Spotify Chat</p>
+                            </div>
+                            <div class="footer">
+                                <p>Email này được gửi tự động, vui lòng không trả lời.</p>
+                                <p>&copy; {timezone.now().year} Spotify Chat. All rights reserved.</p>
+                            </div>
+                        </div>
+                    </body>
+                    </html>
+                    """
+                    
+                    plain_message = strip_tags(html_message)
+                    from_email = settings.DEFAULT_FROM_EMAIL
+                    to_email = [user.email]
+                    
+                    send_mail(
+                        subject=subject,
+                        message=plain_message,
+                        from_email=from_email,
+                        recipient_list=to_email,
+                        html_message=html_message,
+                        fail_silently=False
+                    )
+                    logger.info(f"Password reset email sent to {user.email}")
+                    return Response(
+                        {'message': 'Mã xác nhận đã được gửi đến email của bạn.'},
+                        status=status.HTTP_200_OK
+                    )
+                except Exception as e:
+                    # Log chi tiết lỗi để debug
+                    logger.error(f"Error sending email to {user.email}: {str(e)}", exc_info=True)
+                    
+                    # Trong môi trường development, trả về token khi gặp lỗi gửi email
+                    if settings.DEBUG:
+                        return Response(
+                            {
+                                'message': f'Gặp lỗi khi gửi email, nhưng đây là token của bạn (chỉ cho development): {token_obj.token}',
+                                'error_detail': str(e)
+                            },
+                            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                        )
+                    
+                    return Response(
+                        {'error': 'Không thể gửi email. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ.'},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
+                    
+            except User.DoesNotExist:
+                # Không tiết lộ liệu email có tồn tại hay không
+                logger.info(f"Password reset attempted for non-existent email: {email}")
                 return Response(
-                    {'message': 'Mã xác nhận đã được gửi đến email của bạn.'},
+                    {'message': 'Nếu địa chỉ email này được đăng ký, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu.'},
                     status=status.HTTP_200_OK
                 )
-            except Exception as e:
-                # Log chi tiết lỗi để theo dõi trong production
-                logger.error(f"Error sending password reset email to {user.email}: {str(e)}", exc_info=True)
-                
-                # Kiểm tra cụ thể các loại lỗi phổ biến
-                if 'SMTPAuthenticationError' in str(e):
-                    logger.critical("SMTP Authentication failed. Please check EMAIL_HOST_USER and EMAIL_HOST_PASSWORD")
-                elif 'SMTPServerDisconnected' in str(e):
-                    logger.critical("SMTP Server disconnected. Please check EMAIL_HOST and EMAIL_PORT")
-                elif 'SMTPException' in str(e):
-                    logger.critical(f"General SMTP error: {str(e)}")
-                
-                return Response(
-                    {'error': 'Không thể gửi email. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ.'},
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
-                
-        except User.DoesNotExist:
-            # Không tiết lộ liệu email có tồn tại hay không
-            logger.info(f"Password reset attempted for non-existent email: {email}")
+        except Exception as e:
+            # Log lỗi tổng quát
+            logger.error(f"Unexpected error in forgot password view: {str(e)}", exc_info=True)
             return Response(
-                {'message': 'Nếu địa chỉ email này được đăng ký, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu.'},
-                status=status.HTTP_200_OK
+                {'error': 'Đã xảy ra lỗi. Vui lòng thử lại sau.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 class VerifyPasswordResetTokenView(generics.CreateAPIView):

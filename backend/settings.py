@@ -13,6 +13,10 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from pathlib import Path
 import os
 from datetime import timedelta
+import logging
+
+# Cấu hình logger
+logger = logging.getLogger(__name__)
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -231,15 +235,30 @@ SPECTACULAR_SETTINGS = {
 }
 
 # Cấu hình Email
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'  # Hoặc mail server bạn dùng
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = env("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
+# Mặc định sử dụng console backend cho development
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = 'noreply@spotifybackend.shop'
 
-# Chuyển sang email console nếu đang ở môi trường phát triển
-if DEBUG:
-    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# Cấu hình SMTP cho production - chỉ sử dụng khi có đầy đủ thông tin
+if not DEBUG:
+    try:
+        # Kiểm tra xem các biến môi trường cần thiết có tồn tại không
+        email_host_user = os.environ.get("EMAIL_HOST_USER")
+        email_host_pass = os.environ.get("EMAIL_HOST_PASSWORD")
+        
+        # Chỉ cấu hình SMTP nếu có đầy đủ thông tin
+        if email_host_user and email_host_pass:
+            EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+            EMAIL_HOST = 'smtp.gmail.com'
+            EMAIL_PORT = 587
+            EMAIL_USE_TLS = True
+            EMAIL_HOST_USER = email_host_user
+            EMAIL_HOST_PASSWORD = email_host_pass
+            logger.info("SMTP email backend configured successfully")
+        else:
+            logger.warning("Missing email credentials, using console backend instead")
+    except Exception as e:
+        logger.error(f"Error configuring email: {str(e)}. Using console backend.")
+        # Tiếp tục sử dụng console backend nếu có lỗi
+        pass
 
