@@ -88,7 +88,7 @@ class PublicUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ('id', 'username', 'avatar', 'bio')
-        # Chỉ hiển thị các trường công khai, không hiển thị email và các thông tin cá nhân khác
+        # Chỉ hiển thị các trường công khai, không hiển thị email và các thông tin cá nhân khác 
 
 class AdminUserSerializer(serializers.ModelSerializer):
     """Serializer cho việc quản lý người dùng."""
@@ -159,4 +159,26 @@ class CompleteUserSerializer(serializers.ModelSerializer):
     def get_activities(self, obj):
         from music.serializers import UserActivitySerializer
         activities = obj.activities.all()[:10]  # Get 10 most recent activities
-        return UserActivitySerializer(activities, many=True).data 
+        return UserActivitySerializer(activities, many=True).data
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    """Serializer cho chức năng quên mật khẩu."""
+    email = serializers.EmailField()
+
+class VerifyPasswordResetTokenSerializer(serializers.Serializer):
+    """Serializer cho chức năng xác minh token reset mật khẩu."""
+    email = serializers.EmailField()
+    token = serializers.CharField(min_length=6, max_length=6)
+    new_password = serializers.CharField(min_length=8, write_only=True)
+    
+    def validate_token(self, value):
+        # Chỉ chấp nhận token có 6 ký tự số
+        if not value.isdigit():
+            raise serializers.ValidationError("Token phải chứa 6 ký tự số.")
+        return value
+    
+    def validate_new_password(self, value):
+        # Kiểm tra độ mạnh của mật khẩu
+        if len(value) < 8:
+            raise serializers.ValidationError("Mật khẩu phải có ít nhất 8 ký tự.")
+        return value 

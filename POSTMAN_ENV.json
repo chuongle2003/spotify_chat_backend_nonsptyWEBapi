@@ -55,6 +55,18 @@
             "value": "",
             "type": "default",
             "enabled": true
+        },
+        {
+            "key": "reset_token",
+            "value": "",
+            "type": "default",
+            "enabled": true
+        },
+        {
+            "key": "reset_email",
+            "value": "",
+            "type": "default",
+            "enabled": true
         }
     ],
     "_postman_variable_scope": "environment",

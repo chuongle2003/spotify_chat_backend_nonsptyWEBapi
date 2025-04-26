@@ -1,5 +1,8 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
+import random
+import string
 
 class User(AbstractUser):
     email = models.EmailField(unique=True)
@@ -55,3 +58,39 @@ class User(AbstractUser):
             # Nếu user là admin, tự động grant các quyền cần thiết
             self.is_staff = True
         super().save(*args, **kwargs)
+
+class PasswordResetToken(models.Model):
+    """Model for password reset tokens."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_tokens')
+    token = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    is_used = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return f"Reset token for {self.user.email}"
+    
+    def save(self, *args, **kwargs):
+        if not self.token:
+            # Tạo token ngẫu nhiên gồm 6 chữ số
+            self.token = ''.join(random.choices(string.digits, k=6))
+        
+        if not self.expires_at:
+            # Token hết hạn sau 15 phút
+            self.expires_at = timezone.now() + timezone.timedelta(minutes=15)
+            
+        super().save(*args, **kwargs)
+    
+    @property
+    def is_valid(self):
+        """Check if token is valid."""
+        return not self.is_used and self.expires_at > timezone.now()
+    
+    @classmethod
+    def generate_token(cls, user):
+        """Generate a new token for the user."""
+        # Đánh dấu tất cả token cũ của user là đã sử dụng
+        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+        
+        # Tạo token mới
+        return cls.objects.create(user=user)

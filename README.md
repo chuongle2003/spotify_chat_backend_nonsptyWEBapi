@@ -192,3 +192,61 @@ spotify_chat_backend/
 ## License
 
 [MIT License](LICENSE)
+
+## Chức năng quên mật khẩu
+
+Hệ thống cung cấp API cho phép người dùng đặt lại mật khẩu khi quên:
+
+### 1. Yêu cầu đặt lại mật khẩu
+
+```
+POST /api/v1/accounts/auth/forgot-password/
+```
+
+**Request body:**
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response:**
+
+```json
+{
+  "message": "Mã xác nhận đã được gửi đến email của bạn."
+}
+```
+
+Hệ thống sẽ gửi một token gồm 6 chữ số đến email người dùng.
+
+### 2. Xác thực token và đặt lại mật khẩu
+
+```
+POST /api/v1/accounts/auth/verify-reset-token/
+```
+
+**Request body:**
+
+```json
+{
+  "email": "user@example.com",
+  "token": "123456",
+  "new_password": "NewPassword123"
+}
+```
+
+**Response:**
+
+```json
+{
+  "message": "Đặt lại mật khẩu thành công. Vui lòng đăng nhập với mật khẩu mới."
+}
+```
+
+**Lưu ý:**
+
+- Token chỉ có hiệu lực trong vòng 15 phút
+- Mật khẩu mới phải có ít nhất 8 ký tự
+- Token chỉ có thể sử dụng một lần

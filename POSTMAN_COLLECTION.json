@@ -215,6 +215,226 @@
                             }
                         }
                     ]
+                },
+                {
+                    "name": "Forgot Password",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"user@example.com\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/auth/forgot-password/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "auth",
+                                "forgot-password",
+                                ""
+                            ]
+                        },
+                        "description": "Yêu cầu đặt lại mật khẩu và gửi mã xác nhận đến email người dùng"
+                    },
+                    "response": [
+                        {
+                            "name": "Forgot Password Success",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"email\": \"user@example.com\"\n}"
+                                },
+                                "url": "{{base_url}}/api/v1/accounts/auth/forgot-password/"
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"message\": \"Mã xác nhận đã được gửi đến email của bạn.\"\n}"
+                        }
+                    ],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status code is 200\", function () {",
+                                    "    pm.response.to.have.status(200);",
+                                    "});",
+                                    "pm.test(\"Response has success message\", function () {",
+                                    "    var jsonData = pm.response.json();",
+                                    "    pm.expect(jsonData).to.have.property('message');",
+                                    "});",
+                                    "// Lưu email để sử dụng cho verify token",
+                                    "let requestData = JSON.parse(pm.request.body.raw);",
+                                    "if (requestData && requestData.email) {",
+                                    "    pm.environment.set(\"reset_email\", requestData.email);",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Verify Reset Token",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"{{reset_email}}\",\n  \"token\": \"{{reset_token}}\",\n  \"new_password\": \"NewPassword123\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/accounts/auth/verify-reset-token/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "accounts",
+                                "auth",
+                                "verify-reset-token",
+                                ""
+                            ]
+                        },
+                        "description": "Xác thực mã token và đặt lại mật khẩu mới"
+                    },
+                    "response": [
+                        {
+                            "name": "Verify Reset Token Success",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"email\": \"{{reset_email}}\",\n  \"token\": \"{{reset_token}}\",\n  \"new_password\": \"NewPassword123\"\n}"
+                                },
+                                "url": "{{base_url}}/api/v1/accounts/auth/verify-reset-token/"
+                            },
+                            "status": "OK",
+                            "code": 200,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"message\": \"Đặt lại mật khẩu thành công. Vui lòng đăng nhập với mật khẩu mới.\"\n}"
+                        },
+                        {
+                            "name": "Invalid Token",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"email\": \"{{reset_email}}\",\n  \"token\": \"000000\",\n  \"new_password\": \"NewPassword123\"\n}"
+                                },
+                                "url": "{{base_url}}/api/v1/accounts/auth/verify-reset-token/"
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"Mã xác nhận không hợp lệ.\"\n}"
+                        },
+                        {
+                            "name": "Expired Token",
+                            "originalRequest": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"email\": \"{{reset_email}}\",\n  \"token\": \"{{reset_token}}\",\n  \"new_password\": \"NewPassword123\"\n}"
+                                },
+                                "url": "{{base_url}}/api/v1/accounts/auth/verify-reset-token/"
+                            },
+                            "status": "Bad Request",
+                            "code": 400,
+                            "_postman_previewlanguage": "json",
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n    \"error\": \"Mã xác nhận đã hết hạn.\"\n}"
+                        }
+                    ],
+                    "event": [
+                        {
+                            "listen": "test",
+                            "script": {
+                                "type": "text/javascript",
+                                "exec": [
+                                    "pm.test(\"Status code is 200 or 400\", function () {",
+                                    "    pm.expect(pm.response.code).to.be.oneOf([200, 400]);",
+                                    "});",
+                                    "if (pm.response.code === 200) {",
+                                    "    pm.test(\"Response has success message\", function () {",
+                                    "        var jsonData = pm.response.json();",
+                                    "        pm.expect(jsonData).to.have.property('message');",
+                                    "    });",
+                                    "} else if (pm.response.code === 400) {",
+                                    "    pm.test(\"Response has error message\", function () {",
+                                    "        var jsonData = pm.response.json();",
+                                    "        pm.expect(jsonData).to.have.property('error');",
+                                    "    });",
+                                    "}"
+                                ]
+                            }
+                        }
+                    ]
                 }
             ]
         },
@@ -1218,6 +1438,16 @@
         },
         {
             "key": "recipient_id",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "reset_email",
+            "value": "",
+            "type": "string"
+        },
+        {
+            "key": "reset_token",
             "value": "",
             "type": "string"
         }

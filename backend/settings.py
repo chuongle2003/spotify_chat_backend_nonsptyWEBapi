@@ -229,3 +229,17 @@ SPECTACULAR_SETTINGS = {
         'appName': "Chat API",
     },
 }
+
+# Cấu hình Email
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # Hoặc mail server bạn dùng
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = env("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = env("EMAIL_HOST_PASSWORD")
+DEFAULT_FROM_EMAIL = 'noreply@spotifybackend.shop'
+
+# Chuyển sang email console nếu đang ở môi trường phát triển
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+

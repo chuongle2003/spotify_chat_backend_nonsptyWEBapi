@@ -1,26 +1,30 @@
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin
-from .models import User
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from .models import User, PasswordResetToken
 
-@admin.register(User)
-class CustomUserAdmin(UserAdmin):
-    list_display = ('email', 'username', 'is_admin', 'is_active')
+class UserAdmin(BaseUserAdmin):
+    list_display = ('username', 'email', 'is_admin', 'is_active', 'date_joined')
     list_filter = ('is_admin', 'is_active')
-    search_fields = ('email', 'username')
-    ordering = ('email',)
-    
-    # Tùy chỉnh fieldsets để tập trung vào is_admin
+    search_fields = ('username', 'email', 'first_name', 'last_name')
+    ordering = ('-date_joined',)
     fieldsets = (
-        (None, {'fields': ('email', 'password')}),
-        ('Personal info', {'fields': ('username', 'first_name', 'last_name', 'avatar', 'bio')}),
-        ('Permissions', {'fields': ('is_admin', 'is_active')}),
-        ('Important dates', {'fields': ('last_login', 'date_joined')}),
+        (None, {'fields': ('username', 'email', 'password')}),
+        ('Personal info', {'fields': ('first_name', 'last_name', 'avatar', 'bio')}),
+        ('Permissions', {'fields': ('is_active', 'is_admin', 'is_superuser')}),
     )
-    
-    # Tùy chỉnh add_fieldsets
     add_fieldsets = (
         (None, {
             'classes': ('wide',),
-            'fields': ('email', 'username', 'password1', 'password2', 'is_admin', 'is_active'),
+            'fields': ('username', 'email', 'password1', 'password2'),
         }),
     )
+
+class PasswordResetTokenAdmin(admin.ModelAdmin):
+    list_display = ('user', 'token', 'created_at', 'expires_at', 'is_used')
+    list_filter = ('is_used',)
+    search_fields = ('user__email', 'user__username')
+    ordering = ('-created_at',)
+    readonly_fields = ('token', 'created_at', 'expires_at')
+
+admin.site.register(User, UserAdmin)
+admin.site.register(PasswordResetToken, PasswordResetTokenAdmin)

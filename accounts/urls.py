@@ -16,6 +16,8 @@ urlpatterns = [
         path('register/', views.RegisterView.as_view(), name='register'),
         # LogoutView đã được chuyển lên /api/v1/auth/logout/ 
         # nên không còn khai báo ở đây nữa
+        path('forgot-password/', views.ForgotPasswordView.as_view(), name='forgot-password'),
+        path('verify-reset-token/', views.VerifyPasswordResetTokenView.as_view(), name='verify-reset-token'),
     ])),
     
     # Public endpoints - nhóm lại các endpoints công khai
