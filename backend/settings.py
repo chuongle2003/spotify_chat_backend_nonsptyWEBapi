@@ -165,8 +165,10 @@ CORS_ALLOWED_ORIGINS = [
     "https://spotifybackend.shop",
     "http://www.spotifybackend.shop",
     "https://www.spotifybackend.shop",
-    "https://spotify-clone-ten-gules-29.vercel.app"
+    "https://spotify-clone-ten-gules-29.vercel.app",
+    "http://127.0.0.1:5500"
 ]
+CORS_ALLOW_ALL_ORIGINS = True
 
 ASGI_APPLICATION = 'backend.asgi.application'
 

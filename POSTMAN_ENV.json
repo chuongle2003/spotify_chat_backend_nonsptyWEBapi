@@ -34,25 +34,25 @@
         },
         {
             "key": "target_user_id",
-            "value": "",
+            "value": "2",
             "type": "default",
             "enabled": true
         },
         {
             "key": "song_id",
-            "value": "",
+            "value": "1",
             "type": "default",
             "enabled": true
         },
         {
             "key": "playlist_id",
-            "value": "",
+            "value": "1",
             "type": "default",
             "enabled": true
         },
         {
             "key": "recipient_id",
-            "value": "",
+            "value": "2",
             "type": "default",
             "enabled": true
         },
@@ -65,6 +65,18 @@
         {
             "key": "reset_email",
             "value": "",
+            "type": "default",
+            "enabled": true
+        },
+        {
+            "key": "album_id",
+            "value": "1",
+            "type": "default",
+            "enabled": true
+        },
+        {
+            "key": "genre_id",
+            "value": "1",
             "type": "default",
             "enabled": true
         }

@@ -1,0 +1,230 @@
+@startuml Music System
+
+' Define colors
+!define PRIMARY_COLOR #007bff
+!define SECONDARY_COLOR #6c757d
+!define SUCCESS_COLOR #28a745
+!define DANGER_COLOR #dc3545
+!define WARNING_COLOR #ffc107
+!define INFO_COLOR #17a2b8
+
+' Define stereotypes
+skinparam class {
+    BackgroundColor White
+    ArrowColor Black
+    BorderColor Black
+}
+
+' Define User Classes
+package "Users" {
+    class User {
+        + id: Integer
+        + username: String
+        + email: String
+        + password: String
+        + avatar: String
+        + bio: String
+        + is_active: Boolean
+        + created_at: DateTime
+        + has_admin_access(): Boolean
+    }
+
+    class Admin {
+        + is_admin: Boolean = true
+        + is_superuser: Boolean
+        + manage_all_content()
+        + manage_all_users()
+        + access_admin_panel()
+    }
+
+    class AuthenticatedUser {
+        + upload_song()
+        + create_playlist()
+        + like_song()
+        + comment_song()
+        + follow_playlist()
+        + view_library()
+        + get_recommendations()
+    }
+
+    class GuestUser {
+        + view_public_content()
+        + search_songs()
+        + view_trending()
+    }
+
+    User <|-- Admin
+    User <|-- AuthenticatedUser
+    User <|-- GuestUser
+}
+
+' Define Music Models
+package "Music" {
+    class Song {
+        + id: Integer
+        + title: String
+        + artist: String
+        + album: String
+        + duration: Integer
+        + audio_file: File
+        + cover_image: Image
+        + genre: String
+        + likes_count: Integer
+        + play_count: Integer
+        + uploaded_by: User
+        + created_at: DateTime
+        + lyrics: Text
+    }
+
+    class Playlist {
+        + id: Integer
+        + name: String
+        + user: User
+        + description: Text
+        + is_public: Boolean
+        + cover_image: Image
+        + followers: User[]
+        + created_at: DateTime
+        + updated_at: DateTime
+        + can_access(user): Boolean
+    }
+
+    class Album {
+        + id: Integer
+        + title: String
+        + artist: String
+        + release_date: Date
+        + cover_image: Image
+        + description: Text
+        + created_at: DateTime
+    }
+
+    class Genre {
+        + id: Integer
+        + name: String
+        + description: Text
+    }
+
+    class Comment {
+        + id: Integer
+        + user: User
+        + song: Song
+        + content: Text
+        + created_at: DateTime
+    }
+
+    class Rating {
+        + id: Integer
+        + user: User
+        + song: Song
+        + rating: Integer
+        + created_at: DateTime
+    }
+
+    class SongPlayHistory {
+        + id: Integer
+        + user: User
+        + song: Song
+        + played_at: DateTime
+    }
+
+    Song "*" --o "1" User : uploaded by >
+    Playlist "*" --o "1" User : owned by >
+    Playlist "*" --o "*" Song : contains >
+    Playlist "*" --o "*" User : followed by >
+    Comment "*" --o "1" User : authored by >
+    Comment "*" --o "1" Song : posted on >
+    Rating "*" --o "1" User : rated by >
+    Rating "*" --o "1" Song : given to >
+    SongPlayHistory "*" --o "1" User : logged for >
+    SongPlayHistory "*" --o "1" Song : played >
+    User "*" --o "*" Song : favorite >
+}
+
+' Define API Views
+package "API" {
+    class SongViewSet {
+        + list()
+        + retrieve()
+        + create()
+        + update()
+        + destroy()
+        + play()
+        + like()
+        + trending()
+        + recommended()
+        + search()
+    }
+
+    class PlaylistViewSet {
+        + list()
+        + retrieve()
+        + create()
+        + update()
+        + destroy()
+        + add_song()
+        + remove_song()
+        + follow()
+        + unfollow()
+    }
+
+    class UserLibraryView {
+        + get()
+    }
+
+    class SongUploadView {
+        + post()
+    }
+
+    class PublicSearchView {
+        + get()
+    }
+
+    class TrendingSongsView {
+        + get()
+    }
+
+    SongViewSet ..> Song : manages >
+    PlaylistViewSet ..> Playlist : manages >
+    UserLibraryView ..> SongPlayHistory : accesses >
+    UserLibraryView ..> Playlist : accesses >
+    SongUploadView ..> Song : creates >
+    PublicSearchView ..> Song : searches >
+    TrendingSongsView ..> Song : lists >
+}
+
+' Define Permissions
+package "Permissions" {
+    class IsAuthenticated {
+        + has_permission(request, view): Boolean
+    }
+
+    class AllowAny {
+        + has_permission(request, view): Boolean
+    }
+
+    class IsAdminUser {
+        + has_permission(request, view): Boolean
+    }
+
+    IsAuthenticated ..> AuthenticatedUser : grants access to >
+    IsAuthenticated ..> Admin : grants access to >
+    AllowAny ..> GuestUser : grants access to >
+    AllowAny ..> AuthenticatedUser : grants access to >
+    AllowAny ..> Admin : grants access to >
+    IsAdminUser ..> Admin : grants access to >
+}
+
+' Music Playing Process
+note right of SongViewSet
+  <b>Music Playing Process:</b>
+  1. User requests song through API
+  2. SongViewSet.play() method is called
+  3. System checks user permissions
+  4. System streams the audio file to client
+  5. System logs the play via SongPlayHistory
+  6. System increments song.play_count
+  7. Play history is used for recommendations
+end note
+
+@enduml 

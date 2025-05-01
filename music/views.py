@@ -1,4 +1,4 @@
-from django.shortcuts import get_object_or_404
+from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -12,11 +12,15 @@ from .serializers import (
 )
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from django.db.models import Q, Count, Avg
+from django.db.models import Q, Count, Avg, Sum
 import random
 from datetime import datetime, timedelta
+import django.utils.timezone
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.request import Request
+from .utils import get_audio_metadata, convert_audio_format, extract_synchronized_lyrics, import_synchronized_lyrics, normalize_audio, get_waveform_data
+import os
+from io import BytesIO
 
 User = get_user_model()
 
@@ -206,14 +210,67 @@ class SongUploadView(APIView):
         data = request.data.copy()
         data['uploaded_by'] = request.user.id
         
+        # Xử lý file âm thanh
+        audio_file = request.FILES.get('audio_file')
+        if audio_file:
+            # Lưu file tạm để trích xuất metadata
+            temp_file_path = f"/tmp/{audio_file.name}"
+            with open(temp_file_path, 'wb+') as destination:
+                for chunk in audio_file.chunks():
+                    destination.write(chunk)
+            
+            try:
+                # Trích xuất metadata
+                metadata = get_audio_metadata(temp_file_path)
+                
+                # Chuyển đổi sang MP3 nếu không phải MP3
+                if not audio_file.name.lower().endswith('.mp3'):
+                    converted_file = convert_audio_format(temp_file_path, output_format='mp3')
+                    if converted_file:
+                        # Thay thế file gốc bằng file MP3
+                        with open(converted_file, 'rb') as f:
+                            audio_content = f.read()
+                        # Tạo tên file mới
+                        name, _ = os.path.splitext(audio_file.name)
+                        audio_file.name = f"{name}.mp3"
+                        audio_file.file = BytesIO(audio_content)
+                        audio_file.content_type = 'audio/mpeg'
+                
+                # Chuẩn hóa âm lượng nếu cần
+                # normalized_file = normalize_audio(temp_file_path)
+                # if normalized_file:
+                #     with open(normalized_file, 'rb') as f:
+                #         audio_content = f.read()
+                #     audio_file.file = BytesIO(audio_content)
+                
+                # Bổ sung metadata vào data
+                if not data.get('title') and metadata.get('title'):
+                    data['title'] = metadata['title']
+                if not data.get('artist') and metadata.get('artist'):
+                    data['artist'] = metadata['artist']
+                if not data.get('album') and metadata.get('album'):
+                    data['album'] = metadata['album']
+                if not data.get('genre') and metadata.get('genre'):
+                    data['genre'] = metadata['genre']
+                if not data.get('duration') and metadata.get('duration'):
+                    data['duration'] = metadata['duration']
+                if not data.get('lyrics') and metadata.get('lyrics'):
+                    data['lyrics'] = metadata['lyrics']
+            except Exception as e:
+                print(f"Error processing audio file: {str(e)}")
+            finally:
+                # Xóa file tạm
+                if os.path.exists(temp_file_path):
+                    os.remove(temp_file_path)
+        
         serializer = SongSerializer(data=data)
         if serializer.is_valid():
             # Lưu song
             song = serializer.save()
             
-            # Xử lý audio file nếu cần (có thể thêm code xử lý file ở đây)
-            # from .utils import process_audio_file
-            # process_audio_file(song.audio_file.path)
+            # Tạo dữ liệu waveform nếu cần
+            # waveform = get_waveform_data(song.audio_file.path)
+            # save waveform data...
             
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -472,3 +529,267 @@ class SearchView(APIView):
             'playlists': playlist_serializer.data,
             'albums': album_serializer.data
         })
+
+# Thêm endpoint để xử lý lời bài hát đồng bộ
+class SyncedLyricsView(APIView):
+    """API xử lý lời bài hát đồng bộ theo thời gian"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, song_id, format=None):
+        """Nhập lời bài hát đồng bộ"""
+        # Kiểm tra quyền: chỉ admin hoặc người upload bài hát mới có thể cập nhật lời
+        try:
+            song = Song.objects.get(id=song_id)
+            if not request.user.is_superuser and request.user != song.uploaded_by:
+                return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+            
+            lyrics_text = request.data.get('lyrics_text', '')
+            if not lyrics_text:
+                return Response({'error': 'No lyrics provided'}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Import lời đồng bộ
+            success = import_synchronized_lyrics(song_id, lyrics_text)
+            if success:
+                return Response({'status': 'Synced lyrics imported successfully'})
+            else:
+                return Response({'error': 'Failed to import synced lyrics'}, status=status.HTTP_400_BAD_REQUEST)
+        except Song.DoesNotExist:
+            return Response({'error': 'Song not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    def get(self, request, song_id, format=None):
+        """Lấy lời bài hát đồng bộ"""
+        try:
+            song = Song.objects.get(id=song_id)
+            lyric_lines = song.lyric_lines.all()  # type: ignore
+            
+            # Format lời đồng bộ
+            lyrics = []
+            for line in lyric_lines:
+                lyrics.append({
+                    'timestamp': line.timestamp,
+                    'formatted_time': line.format_timestamp(),
+                    'text': line.text
+                })
+            
+            return Response({
+                'song_id': song_id,
+                'song_title': song.title,
+                'lyrics': lyrics
+            })
+        except Song.DoesNotExist:
+            return Response({'error': 'Song not found'}, status=status.HTTP_404_NOT_FOUND)
+
+# Admin Statistics and Analytics
+class AdminStatisticsView(APIView):
+    """View hiển thị thống kê tổng quan cho admin"""
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request, format=None):
+        """Lấy thống kê tổng quan về hệ thống âm nhạc"""
+        # Thống kê tổng quan
+        total_songs = Song.objects.count()
+        total_playlists = Playlist.objects.count()
+        total_users = User.objects.count()
+        total_active_users = User.objects.filter(last_login__gte=django.utils.timezone.now() - timedelta(days=30)).count()
+        
+        # Tổng số lượt nghe
+        total_plays = sum(Song.objects.values_list('play_count', flat=True))
+        
+        # Thống kê theo thể loại
+        genre_stats = {}
+        genres = set(Song.objects.values_list('genre', flat=True).distinct())
+        for genre in genres:
+            if genre:  # Một số bài hát có thể không có thể loại
+                genre_count = Song.objects.filter(genre=genre).count()
+                genre_plays = Song.objects.filter(genre=genre).aggregate(total=Sum('play_count'))['total'] or 0
+                genre_stats[genre] = {
+                    'song_count': genre_count,
+                    'total_plays': genre_plays,
+                    'avg_plays': round(genre_plays / genre_count, 2) if genre_count > 0 else 0
+                }
+        
+        # Thống kê theo thời gian
+        today = django.utils.timezone.now().date()
+        month_plays = {}
+        for i in range(30):
+            date = today - timedelta(days=i)
+            count = SongPlayHistory.objects.filter(played_at__date=date).count()
+            month_plays[date.strftime('%Y-%m-%d')] = count
+        
+        # Top bài hát được nghe nhiều nhất
+        top_songs = Song.objects.order_by('-play_count')[:10]
+        top_songs_data = SongSerializer(top_songs, many=True).data
+        
+        # Top playlist được theo dõi nhiều nhất
+        top_playlists = Playlist.objects.annotate(
+            follower_count=Count('followers')
+        ).order_by('-follower_count')[:10]
+        top_playlists_data = PlaylistSerializer(top_playlists, many=True).data
+        
+        # Thống kê người dùng mới
+        new_users_by_day = {}
+        for i in range(30):
+            date = today - timedelta(days=i)
+            count = User.objects.filter(
+                date_joined__year=date.year,
+                date_joined__month=date.month,
+                date_joined__day=date.day
+            ).count()
+            new_users_by_day[date.strftime('%Y-%m-%d')] = count
+        
+        return Response({
+            'overview': {
+                'total_songs': total_songs,
+                'total_playlists': total_playlists,
+                'total_users': total_users,
+                'active_users': total_active_users,
+                'total_plays': total_plays,
+            },
+            'genre_stats': genre_stats,
+            'monthly_plays': month_plays,
+            'top_songs': top_songs_data,
+            'top_playlists': top_playlists_data,
+            'new_users': new_users_by_day
+        })
+
+
+class AdminUserActivityView(APIView):
+    """View hiển thị thông tin hoạt động người dùng cho admin"""
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request, format=None):
+        """Lấy thông tin hoạt động người dùng"""
+        # Lấy user_id từ query param nếu có
+        user_id = request.query_params.get('user_id')
+        
+        if user_id:
+            # Thống kê cho một người dùng cụ thể
+            try:
+                user = User.objects.get(id=user_id)
+                
+                # Thông tin cơ bản
+                user_info = {
+                    'id': getattr(user, 'id', None),
+                    'username': user.username,
+                    'email': user.email,
+                    'date_joined': user.date_joined,
+                    'last_login': user.last_login,
+                    'is_active': user.is_active,
+                }
+                
+                # Lịch sử nghe nhạc
+                play_history = SongPlayHistory.objects.filter(user=user).order_by('-played_at')[:100]
+                play_history_data = []
+                for history in play_history:
+                    play_history_data.append({
+                        'song_id': getattr(history.song, 'id', None),
+                        'song_title': history.song.title,
+                        'song_artist': history.song.artist,
+                        'played_at': history.played_at,
+                    })
+                
+                # Thống kê thể loại yêu thích
+                favorite_genres = {}
+                for history in SongPlayHistory.objects.filter(user=user):
+                    genre = history.song.genre
+                    if genre in favorite_genres:
+                        favorite_genres[genre] += 1
+                    else:
+                        favorite_genres[genre] = 1
+                
+                # Sắp xếp thể loại theo số lượt nghe
+                favorite_genres = dict(sorted(favorite_genres.items(), 
+                                             key=lambda item: item[1], 
+                                             reverse=True))
+                
+                # Playlist của người dùng
+                playlists = Playlist.objects.filter(user=user)
+                playlist_data = PlaylistSerializer(playlists, many=True).data
+                
+                # Bài hát yêu thích
+                favorite_songs = user.favorite_songs.all()  # type: ignore
+                favorite_songs_data = SongSerializer(favorite_songs, many=True).data
+                
+                # Thống kê hoạt động theo thời gian
+                today = django.utils.timezone.now().date()
+                daily_activity = {}
+                for i in range(30):
+                    date = today - timedelta(days=i)
+                    count = SongPlayHistory.objects.filter(
+                        user=user,
+                        played_at__year=date.year,
+                        played_at__month=date.month,
+                        played_at__day=date.day
+                    ).count()
+                    daily_activity[date.strftime('%Y-%m-%d')] = count
+                
+                return Response({
+                    'user_info': user_info,
+                    'play_history': play_history_data,
+                    'favorite_genres': favorite_genres,
+                    'playlists': playlist_data,
+                    'favorite_songs': favorite_songs_data,
+                    'daily_activity': daily_activity,
+                })
+            
+            except User.DoesNotExist:
+                return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        else:
+            # Thống kê cho tất cả người dùng
+            # Top người dùng nghe nhiều nhất
+            top_listeners = User.objects.annotate(
+                play_count=Count('play_history')
+            ).order_by('-play_count')[:10]
+            
+            top_listeners_data = []
+            for user in top_listeners:
+                play_count = SongPlayHistory.objects.filter(user=user).count()
+                top_listeners_data.append({
+                    'id': getattr(user, 'id', None),
+                    'username': user.username,
+                    'play_count': play_count,
+                    'playlist_count': Playlist.objects.filter(user=user).count(),
+                    'date_joined': user.date_joined,
+                    'last_login': user.last_login,
+                })
+            
+            # Người dùng mới đăng ký
+            new_users = User.objects.order_by('-date_joined')[:10]
+            new_users_data = []
+            for user in new_users:
+                new_users_data.append({
+                    'id': getattr(user, 'id', None),
+                    'username': user.username,
+                    'email': user.email,
+                    'date_joined': user.date_joined,
+                    'last_login': user.last_login,
+                })
+            
+            # Người dùng hoạt động nhiều nhất gần đây
+            active_users = User.objects.filter(
+                last_login__gte=django.utils.timezone.now() - timedelta(days=7)
+            ).annotate(
+                recent_plays=Count('play_history', 
+                                  filter=Q(play_history__played_at__gte=django.utils.timezone.now() - timedelta(days=7)))
+            ).order_by('-recent_plays')[:10]
+            
+            active_users_data = []
+            for user in active_users:
+                active_users_data.append({
+                    'id': getattr(user, 'id', None),
+                    'username': user.username,
+                    'recent_plays': getattr(user, 'recent_plays', 0),
+                    'last_login': user.last_login,
+                })
+            
+            return Response({
+                'top_listeners': top_listeners_data,
+                'new_users': new_users_data,
+                'active_users': active_users_data,
+            })
+
+def play_song(request):
+    # Đường dẫn file mp3 mẫu, có thể lấy từ database sau
+    song_url = '/media/songs/2025/04/28/TinhNho-ThanhHien-5825173_XH1ISay.mp3'
+    return render(request, 'play_song.html', {'song_url': song_url})

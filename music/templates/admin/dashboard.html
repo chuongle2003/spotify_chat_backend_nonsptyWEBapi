@@ -1,0 +1,310 @@
+{% extends "admin/base_site.html" %} {% load static %} {% block extrastyle %}
+<style>
+  .dashboard-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    margin-top: 20px;
+  }
+
+  .dashboard-card {
+    background-color: #fff;
+    border-radius: 5px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    padding: 20px;
+  }
+
+  .dashboard-card h3 {
+    margin-top: 0;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+    color: #417690;
+  }
+
+  .stat-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .stat-value {
+    font-weight: bold;
+  }
+
+  .chart-container {
+    height: 250px;
+    margin-top: 15px;
+  }
+
+  .top-list {
+    list-style: none;
+    padding: 0;
+  }
+
+  .top-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .top-list li:last-child {
+    border-bottom: none;
+  }
+
+  .top-list-rank {
+    font-weight: bold;
+    color: #666;
+    margin-right: 10px;
+  }
+
+  .refresh-btn {
+    float: right;
+    margin-top: -36px;
+  }
+
+  .loading {
+    text-align: center;
+    padding: 30px;
+  }
+</style>
+{% endblock %} {% block title %}Music Dashboard{% endblock %} {% block
+breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a>
+  &rsaquo; Music Dashboard
+</div>
+{% endblock %} {% block content %}
+<h1>Music Dashboard</h1>
+<button id="refreshBtn" class="refresh-btn">Refresh Data</button>
+
+<div id="loading" class="loading">
+  <p>Loading dashboard data...</p>
+</div>
+
+<div id="dashboard" class="dashboard-container" style="display: none">
+  <!-- Overview Card -->
+  <div class="dashboard-card">
+    <h3>Overview</h3>
+    <div class="stat-item">
+      <span>Total Songs</span>
+      <span class="stat-value" id="totalSongs">0</span>
+    </div>
+    <div class="stat-item">
+      <span>Total Playlists</span>
+      <span class="stat-value" id="totalPlaylists">0</span>
+    </div>
+    <div class="stat-item">
+      <span>Total Users</span>
+      <span class="stat-value" id="totalUsers">0</span>
+    </div>
+    <div class="stat-item">
+      <span>Active Users (30d)</span>
+      <span class="stat-value" id="activeUsers">0</span>
+    </div>
+    <div class="stat-item">
+      <span>Total Plays</span>
+      <span class="stat-value" id="totalPlays">0</span>
+    </div>
+  </div>
+
+  <!-- Genre Statistics -->
+  <div class="dashboard-card">
+    <h3>Genre Statistics</h3>
+    <div id="genreStatsContainer">
+      <!-- Will be populated by JavaScript -->
+    </div>
+  </div>
+
+  <!-- Monthly Plays Chart -->
+  <div class="dashboard-card">
+    <h3>Monthly Plays</h3>
+    <div class="chart-container" id="monthlyPlaysChart"></div>
+  </div>
+
+  <!-- Top Songs -->
+  <div class="dashboard-card">
+    <h3>Top Songs</h3>
+    <ul class="top-list" id="topSongs">
+      <!-- Will be populated by JavaScript -->
+    </ul>
+  </div>
+
+  <!-- Top Playlists -->
+  <div class="dashboard-card">
+    <h3>Top Playlists</h3>
+    <ul class="top-list" id="topPlaylists">
+      <!-- Will be populated by JavaScript -->
+    </ul>
+  </div>
+
+  <!-- New Users -->
+  <div class="dashboard-card">
+    <h3>New Users (Last 30 Days)</h3>
+    <div class="chart-container" id="newUsersChart"></div>
+  </div>
+</div>
+
+{% endblock %} {% block extrajs %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    fetchDashboardData();
+
+    document
+      .getElementById("refreshBtn")
+      .addEventListener("click", fetchDashboardData);
+
+    function fetchDashboardData() {
+      document.getElementById("loading").style.display = "block";
+      document.getElementById("dashboard").style.display = "none";
+
+      fetch("/api/music/admin/statistics/")
+        .then((response) => response.json())
+        .then((data) => {
+          populateOverview(data.overview);
+          populateGenreStats(data.genre_stats);
+          createMonthlyChart(data.monthly_plays);
+          populateTopSongs(data.top_songs);
+          populateTopPlaylists(data.top_playlists);
+          createNewUsersChart(data.new_users);
+
+          document.getElementById("loading").style.display = "none";
+          document.getElementById("dashboard").style.display = "grid";
+        })
+        .catch((error) => {
+          console.error("Error fetching dashboard data:", error);
+          document.getElementById("loading").innerHTML =
+            "<p>Error loading data. Please try again.</p>";
+        });
+    }
+
+    function populateOverview(overview) {
+      document.getElementById("totalSongs").textContent = overview.total_songs;
+      document.getElementById("totalPlaylists").textContent =
+        overview.total_playlists;
+      document.getElementById("totalUsers").textContent = overview.total_users;
+      document.getElementById("activeUsers").textContent =
+        overview.active_users;
+      document.getElementById("totalPlays").textContent = overview.total_plays;
+    }
+
+    function populateGenreStats(genreStats) {
+      const container = document.getElementById("genreStatsContainer");
+      container.innerHTML = "";
+
+      for (const [genre, stats] of Object.entries(genreStats)) {
+        const genreDiv = document.createElement("div");
+        genreDiv.className = "stat-item";
+        genreDiv.innerHTML = `
+          <span>${genre} (${stats.song_count} songs)</span>
+          <span class="stat-value">${stats.total_plays} plays</span>
+        `;
+        container.appendChild(genreDiv);
+      }
+    }
+
+    function createMonthlyChart(monthlyPlays) {
+      const ctx = document.getElementById("monthlyPlaysChart").getContext("2d");
+
+      // Convert data for Chart.js
+      const labels = Object.keys(monthlyPlays).sort();
+      const data = labels.map((date) => monthlyPlays[date]);
+
+      // Create chart
+      new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: "Daily Plays",
+              data: data,
+              borderColor: "#417690",
+              backgroundColor: "rgba(65, 118, 144, 0.1)",
+              tension: 0.1,
+              fill: true,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+            },
+          },
+        },
+      });
+    }
+
+    function populateTopSongs(songs) {
+      const container = document.getElementById("topSongs");
+      container.innerHTML = "";
+
+      songs.forEach((song, index) => {
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <span><span class="top-list-rank">${index + 1}.</span> ${
+          song.title
+        } - ${song.artist}</span>
+          <span class="stat-value">${song.play_count} plays</span>
+        `;
+        container.appendChild(li);
+      });
+    }
+
+    function populateTopPlaylists(playlists) {
+      const container = document.getElementById("topPlaylists");
+      container.innerHTML = "";
+
+      playlists.forEach((playlist, index) => {
+        const li = document.createElement("li");
+        li.innerHTML = `
+          <span><span class="top-list-rank">${index + 1}.</span> ${
+          playlist.name
+        }</span>
+          <span class="stat-value">${playlist.followers.length} followers</span>
+        `;
+        container.appendChild(li);
+      });
+    }
+
+    function createNewUsersChart(newUsers) {
+      const ctx = document.getElementById("newUsersChart").getContext("2d");
+
+      // Convert data for Chart.js
+      const labels = Object.keys(newUsers).sort();
+      const data = labels.map((date) => newUsers[date]);
+
+      // Create chart
+      new Chart(ctx, {
+        type: "bar",
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: "New Users",
+              data: data,
+              backgroundColor: "rgba(65, 118, 144, 0.7)",
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                precision: 0,
+              },
+            },
+          },
+        },
+      });
+    }
+  });
+</script>
+{% endblock %}

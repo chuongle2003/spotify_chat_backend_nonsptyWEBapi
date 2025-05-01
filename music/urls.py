@@ -1,6 +1,8 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from django.conf import settings
+from django.conf.urls.static import static
 
 
 router = DefaultRouter()
@@ -30,4 +32,10 @@ urlpatterns = [
     path('trending/', views.TrendingSongsView.as_view(), name='trending'),
     path('recommended/', views.RecommendedSongsView.as_view(), name='recommended'),
     path('library/', views.UserLibraryView.as_view(), name='user-library'),
+    
+    # Lyrics management
+    path('songs/<int:song_id>/lyrics/synced/', views.SyncedLyricsView.as_view(), name='synced-lyrics'),
+    path('play/', views.play_song, name='play_song'),
 ]
+if settings.DEBUG:
+      urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

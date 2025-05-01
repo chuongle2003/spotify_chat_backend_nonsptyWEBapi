@@ -157,3 +157,22 @@ class Rating(models.Model):
     class Meta:
         db_table = 'ratings'
         unique_together = ['user', 'song']  # Một user chỉ đánh giá một bài hát một lần
+
+class LyricLine(models.Model):
+    """Model lưu trữ từng dòng lời bài hát đồng bộ với thời gian"""
+    song = models.ForeignKey(Song, on_delete=models.CASCADE, related_name='lyric_lines')
+    timestamp = models.FloatField(help_text="Thời điểm hiển thị lời (tính bằng giây)")
+    text = models.TextField()
+    
+    class Meta:
+        db_table = 'lyric_lines'
+        ordering = ['timestamp']
+        
+    def __str__(self):
+        return f"[{self.format_timestamp()}] {self.text[:30]}"
+    
+    def format_timestamp(self):
+        """Định dạng timestamp thành [mm:ss.xx]"""
+        minutes = int(self.timestamp // 60)
+        seconds = self.timestamp % 60
+        return f"{minutes:02d}:{seconds:05.2f}"
