@@ -8,7 +8,7 @@
    domains=(spotifybackend.shop www.spotifybackend.shop)
    rsa_key_size=4096
    data_path="./certbot"
-   email="your-email@example.com" # Thay đổi email này
+   email="chuongle.nt1@gmail.com" # Thay đổi email này
 
    if [ -d "\" ]; then
      read -p "Existing data found for \. Continue and replace existing certificate? (y/N) " decision
