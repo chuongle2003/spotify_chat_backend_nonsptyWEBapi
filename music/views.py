@@ -198,35 +198,51 @@ class SongViewSet(viewsets.ModelViewSet):
         # Thời điểm từ 'days' ngày trước đến hiện tại
         start_date = datetime.now() - timedelta(days=days)
         
-        # Base query
-        query = Song.objects.filter(
-            play_history__played_at__gte=start_date
-        )
+        try:
+            # Base query
+            query = Song.objects.filter(
+                play_history__played_at__gte=start_date
+            )
+            
+            # Lọc theo thể loại nếu có
+            if genre:
+                query = query.filter(genre=genre)
+            
+            # Tính toán số lượt phát gần đây và sắp xếp
+            trending_songs = query.annotate(
+                recent_plays=Count('play_history')
+            ).order_by('-recent_plays', '-likes_count')[:limit]
+            
+            # Nếu không có bài hát trending, trả về dựa trên likes_count và play_count
+            if not trending_songs.exists():
+                trending_songs = Song.objects.all().order_by('-likes_count', '-play_count')[:limit]
+
+            # Lấy thông tin chi tiết
+            serializer = self.get_serializer(trending_songs, many=True)
+            
+            # Thêm metadata về số lượt phát gần đây cho mỗi bài hát
+            result_data = serializer.data
+            for i, song in enumerate(trending_songs):
+                result_data[i]['recent_plays'] = SongPlayHistory.objects.filter(
+                    song=song, 
+                    played_at__gte=start_date
+                ).count()
+            
+            return Response({
+                'trending_period_days': days,
+                'results': result_data
+            })
         
-        # Lọc theo thể loại nếu có
-        if genre:
-            query = query.filter(genre=genre)
-        
-        # Tính toán số lượt phát gần đây và sắp xếp
-        trending_songs = query.annotate(
-            recent_plays=Count('play_history')
-        ).order_by('-recent_plays', '-likes_count')[:limit]
-        
-        # Lấy thông tin chi tiết
-        serializer = self.get_serializer(trending_songs, many=True)
-        
-        # Thêm metadata về số lượt phát gần đây cho mỗi bài hát
-        result_data = serializer.data
-        for i, song in enumerate(trending_songs):
-            result_data[i]['recent_plays'] = SongPlayHistory.objects.filter(
-                song=song, 
-                played_at__gte=start_date
-            ).count()
-        
-        return Response({
-            'trending_period_days': days,
-            'results': result_data
-        })
+        except Exception as e:
+            # Xử lý lỗi và trả về danh sách bài hát phổ biến thay thế
+            trending_songs = Song.objects.all().order_by('-likes_count', '-play_count')[:limit]
+            serializer = self.get_serializer(trending_songs, many=True)
+            
+            return Response({
+                'trending_period_days': days,
+                'results': serializer.data,
+                'note': 'Showing popular songs due to an error with trending data'
+            })
     
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def recommended(self, request):
