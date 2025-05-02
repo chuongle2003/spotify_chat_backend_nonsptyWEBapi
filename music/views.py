@@ -90,10 +90,21 @@ class SongViewSet(viewsets.ModelViewSet):
     queryset = Song.objects.all()
     serializer_class = SongSerializer
     
+    def get_permissions(self):
+        """
+        Cho phép người dùng chưa đăng nhập xem thông tin bài hát,
+        nhưng chỉ người dùng đã đăng nhập mới có thể thao tác.
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+    
     def perform_create(self, serializer):
         serializer.save(uploaded_by=self.request.user)
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def play(self, request, pk=None):
         """Ghi lại lượt phát của bài hát"""
         song = self.get_object()
@@ -109,7 +120,7 @@ class SongViewSet(viewsets.ModelViewSet):
         
         return Response({'status': 'play logged'})
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def like(self, request, pk=None):
         """Yêu thích bài hát"""
         song = self.get_object()
@@ -126,7 +137,7 @@ class SongViewSet(viewsets.ModelViewSet):
             song.save()
             return Response({'status': 'liked'})
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def trending(self, request):
         """Lấy danh sách bài hát trending dựa trên lượt play gần đây"""
         # Lấy bài hát có nhiều lượt phát nhất trong 7 ngày qua
@@ -140,7 +151,7 @@ class SongViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(trending_songs, many=True)
         return Response(serializer.data)
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def recommended(self, request):
         """Đề xuất bài hát dựa trên thể loại yêu thích của người dùng"""
         user = request.user
@@ -182,7 +193,7 @@ class SongViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(recommended_songs, many=True)
         return Response(serializer.data)
     
-    @action(detail=False, methods=['get'])
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def search(self, request):
         """Tìm kiếm bài hát"""
         query = request.query_params.get('q', '')
@@ -280,6 +291,17 @@ class PlaylistViewSet(viewsets.ModelViewSet):
     queryset = Playlist.objects.all()
     serializer_class = PlaylistSerializer
 
+    def get_permissions(self):
+        """
+        Cho phép người dùng chưa đăng nhập xem playlist công khai,
+        nhưng chỉ người dùng đã đăng nhập mới có thể thao tác.
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+
     def get_queryset(self):
         """Lọc playlist: chỉ hiển thị playlist công khai hoặc của user đang đăng nhập"""
         user = self.request.user
@@ -292,7 +314,7 @@ class PlaylistViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def add_song(self, request, pk=None):
         """Thêm bài hát vào playlist"""
         playlist = self.get_object()
@@ -313,7 +335,7 @@ class PlaylistViewSet(viewsets.ModelViewSet):
         except Song.DoesNotExist:
             return Response({'error': 'Song not found'}, status=status.HTTP_404_NOT_FOUND)
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def remove_song(self, request, pk=None):
         """Xóa bài hát khỏi playlist"""
         playlist = self.get_object()
@@ -334,7 +356,7 @@ class PlaylistViewSet(viewsets.ModelViewSet):
         except Song.DoesNotExist:
             return Response({'error': 'Song not found'}, status=status.HTTP_404_NOT_FOUND)
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def follow(self, request, pk=None):
         """Theo dõi playlist"""
         playlist = self.get_object()
@@ -347,7 +369,7 @@ class PlaylistViewSet(viewsets.ModelViewSet):
         playlist.followers.add(user)
         return Response({'status': 'playlist followed'})
     
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def unfollow(self, request, pk=None):
         """Bỏ theo dõi playlist"""
         playlist = self.get_object()
@@ -361,7 +383,18 @@ class AlbumViewSet(viewsets.ModelViewSet):
     queryset = Album.objects.all()
     serializer_class = AlbumSerializer
     
-    @action(detail=True, methods=['get'])
+    def get_permissions(self):
+        """
+        Cho phép người dùng chưa đăng nhập xem thông tin album,
+        nhưng chỉ người dùng đã đăng nhập mới có thể thao tác.
+        """
+        if self.action in ['list', 'retrieve', 'songs']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+    
+    @action(detail=True, methods=['get'], permission_classes=[AllowAny])
     def songs(self, request, pk=None):
         """Lấy danh sách bài hát trong album"""
         album = self.get_object()
@@ -374,7 +407,18 @@ class GenreViewSet(viewsets.ModelViewSet):
     queryset = Genre.objects.all()
     serializer_class = GenreSerializer
     
-    @action(detail=True, methods=['get'])
+    def get_permissions(self):
+        """
+        Cho phép người dùng chưa đăng nhập xem thông tin thể loại,
+        nhưng chỉ người dùng đã đăng nhập mới có thể thao tác.
+        """
+        if self.action in ['list', 'retrieve', 'songs']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+    
+    @action(detail=True, methods=['get'], permission_classes=[AllowAny])
     def songs(self, request, pk=None):
         """Lấy danh sách bài hát theo thể loại"""
         genre = self.get_object()
@@ -386,7 +430,17 @@ class CommentViewSet(viewsets.ModelViewSet):
     """ViewSet để xử lý các thao tác CRUD với Comment"""
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    
+    def get_permissions(self):
+        """
+        Cho phép người dùng chưa đăng nhập xem bình luận,
+        nhưng chỉ người dùng đã đăng nhập mới có thể thêm, sửa, xóa bình luận.
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
     
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
@@ -444,6 +498,7 @@ class UserLibraryView(APIView):
 
 class TrendingSongsView(APIView):
     """Lấy bài hát xu hướng"""
+    permission_classes = [AllowAny]
     
     def get(self, request, format=None):
         # Lấy top 10 bài hát có nhiều lượt phát nhất
@@ -488,6 +543,7 @@ class RecommendedSongsView(APIView):
 
 class SearchView(APIView):
     """Tìm kiếm bài hát, album, artist, playlist"""
+    permission_classes = [AllowAny]
     
     def get(self, request, format=None):
         query = request.query_params.get('q', '')
@@ -517,7 +573,7 @@ class SearchView(APIView):
         )
         album_serializer = AlbumSerializer(albums, many=True)
         
-        # Lưu lịch sử tìm kiếm
+        # Lưu lịch sử tìm kiếm chỉ khi đã đăng nhập
         if request.user.is_authenticated:
             SearchHistory.objects.create(
                 user=request.user,
@@ -790,6 +846,7 @@ class AdminUserActivityView(APIView):
             })
 
 def play_song(request):
+    """Phương thức cho phép hiển thị trang chơi nhạc cho cả người dùng đã đăng nhập và chưa đăng nhập"""
     # Đường dẫn file mp3 mẫu, có thể lấy từ database sau
     song_url = '/media/songs/2025/04/28/TinhNho-ThanhHien-5825173_XH1ISay.mp3'
     return render(request, 'play_song.html', {'song_url': song_url})

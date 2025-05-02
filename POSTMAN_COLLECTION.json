@@ -940,7 +940,7 @@
                                         }
                                     ]
                                 },
-                                "description": "Lấy danh sách bài hát"
+                                "description": "Lấy danh sách bài hát (không cần đăng nhập)"
                             },
                             "response": [],
                             "event": [
@@ -976,7 +976,7 @@
                                         ""
                                     ]
                                 },
-                                "description": "Lấy thông tin chi tiết của bài hát"
+                                "description": "Lấy thông tin chi tiết của bài hát (không cần đăng nhập)"
                             },
                             "response": [],
                             "event": [
@@ -1110,7 +1110,7 @@
                                         ""
                                     ]
                                 },
-                                "description": "Yêu thích bài hát"
+                                "description": "Yêu thích bài hát (yêu cầu đăng nhập)"
                             },
                             "response": [],
                             "event": [
@@ -1267,7 +1267,7 @@
                                         ""
                                     ]
                                 },
-                                "description": "Phát bài hát qua HTML player"
+                                "description": "Phát bài hát qua HTML player (yêu cầu đăng nhập để ghi nhận lượt nghe)"
                             },
                             "response": [],
                             "event": [
