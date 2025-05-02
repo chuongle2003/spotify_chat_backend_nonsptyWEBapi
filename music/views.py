@@ -5,10 +5,16 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions, viewsets, generics
-from .models import Playlist, Song, Album, Genre, Rating, Comment, SongPlayHistory, SearchHistory
+from .models import (
+    Playlist, Song, Album, Genre, Rating, Comment, SongPlayHistory, 
+    SearchHistory, Artist, Queue, QueueItem, UserStatus, LyricLine, Message
+)
 from .serializers import (
     PlaylistSerializer, SongSerializer, AlbumSerializer, GenreSerializer, 
-    RatingSerializer, CommentSerializer, SongPlayHistorySerializer, SearchHistorySerializer
+    RatingSerializer, CommentSerializer, SongPlayHistorySerializer,
+    SearchHistorySerializer, PlaylistDetailSerializer, SongDetailSerializer,
+    AlbumDetailSerializer, GenreDetailSerializer, ArtistSerializer,
+    QueueSerializer, UserStatusSerializer, LyricLineSerializer, MessageSerializer
 )
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -23,6 +29,39 @@ import os
 from io import BytesIO
 
 User = get_user_model()
+
+# API cho trang chủ - khám phá nhạc
+class HomePageView(APIView):
+    """API cho trang chủ - khám phá nhạc, không yêu cầu đăng nhập"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request, format=None):
+        # Lấy bài hát nổi bật theo thể loại
+        genres = Genre.objects.all()[:6]  # Lấy 6 thể loại
+        featured_by_genre = {}
+        
+        for genre in genres:
+            top_songs = Song.objects.filter(genre=genre.name).order_by('-play_count')[:5]
+            featured_by_genre[genre.name] = SongSerializer(top_songs, many=True).data
+        
+        # Album mới phát hành
+        one_month_ago = datetime.now().date() - timedelta(days=30)
+        new_albums = Album.objects.filter(release_date__gte=one_month_ago).order_by('-release_date')[:8]
+        
+        # Playlist được yêu thích
+        popular_playlists = Playlist.objects.filter(is_public=True).annotate(
+            followers_count=Count('followers')
+        ).order_by('-followers_count')[:8]
+        
+        # Top bài hát được nghe nhiều
+        top_songs = Song.objects.order_by('-play_count')[:10]
+        
+        return Response({
+            'featured_by_genre': featured_by_genre,
+            'new_albums': AlbumSerializer(new_albums, many=True).data,
+            'popular_playlists': PlaylistSerializer(popular_playlists, many=True).data,
+            'top_songs': SongSerializer(top_songs, many=True).data
+        })
 
 # Các view cơ bản
 class PublicPlaylistView(APIView):
@@ -47,6 +86,9 @@ class PublicFeatures(APIView):
             'public_playlists': reverse('public-playlists'),
             'search': reverse('public-search'),
             'top_songs': reverse('trending'),
+            'home': reverse('home'),
+            'albums_new': reverse('albums-new'),
+            'featured_playlists': reverse('featured-playlists'),
         })
 
 class PublicSearchView(APIView):
@@ -95,11 +137,16 @@ class SongViewSet(viewsets.ModelViewSet):
         Cho phép người dùng chưa đăng nhập xem thông tin bài hát,
         nhưng chỉ người dùng đã đăng nhập mới có thể thao tác.
         """
-        if self.action in ['list', 'retrieve']:
+        if self.action in ['list', 'retrieve', 'search', 'trending']:
             permission_classes = [AllowAny]
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
+    
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return SongDetailSerializer
+        return SongSerializer
     
     def perform_create(self, serializer):
         serializer.save(uploaded_by=self.request.user)
@@ -198,17 +245,102 @@ class SongViewSet(viewsets.ModelViewSet):
         """Tìm kiếm bài hát"""
         query = request.query_params.get('q', '')
         if not query:
-            return Response({'error': 'Search query is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Cần cung cấp từ khóa tìm kiếm'}, status=status.HTTP_400_BAD_REQUEST)
         
+        # Tìm kiếm theo title, artist, album, genre
         songs = Song.objects.filter(
             Q(title__icontains=query) | 
             Q(artist__icontains=query) | 
-            Q(album__icontains=query) |
+            Q(album__icontains=query) | 
             Q(genre__icontains=query)
         )
         
-        serializer = self.get_serializer(songs, many=True)
-        return Response(serializer.data)
+        # Bộ lọc thêm
+        genre = request.query_params.get('genre', None)
+        artist = request.query_params.get('artist', None)
+        
+        if genre:
+            songs = songs.filter(genre=genre)
+        
+        if artist:
+            songs = songs.filter(artist=artist)
+        
+        # Sắp xếp
+        sort_by = request.query_params.get('sort', 'title')
+        if sort_by == 'title':
+            songs = songs.order_by('title')
+        elif sort_by == 'artist':
+            songs = songs.order_by('artist')
+        elif sort_by == 'release_date':
+            songs = songs.order_by('-release_date')
+        
+        # Phân trang
+        page_size = int(request.query_params.get('page_size', 20))
+        page = int(request.query_params.get('page', 1))
+        start = (page - 1) * page_size
+        end = start + page_size
+        
+        serializer = self.get_serializer(songs[start:end], many=True)
+        
+        # Lưu lịch sử tìm kiếm nếu đã đăng nhập
+        if request.user.is_authenticated:
+            SearchHistory.objects.create(
+                user=request.user,
+                query=query
+            )
+        
+        return Response({
+            'total': songs.count(),
+            'page': page, 
+            'page_size': page_size,
+            'results': serializer.data
+        })
+    
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def filter(self, request):
+        """Lọc bài hát theo nhiều tiêu chí"""
+        songs = Song.objects.all()
+        
+        # Lọc theo thể loại
+        genre = request.query_params.get('genre', None)
+        if genre:
+            songs = songs.filter(genre=genre)
+        
+        # Lọc theo nghệ sĩ
+        artist = request.query_params.get('artist', None)
+        if artist:
+            songs = songs.filter(artist=artist)
+            
+        # Lọc theo album
+        album = request.query_params.get('album', None)
+        if album:
+            songs = songs.filter(album=album)
+        
+        # Sắp xếp
+        sort_by = request.query_params.get('sort', 'title')
+        if sort_by == 'title':
+            songs = songs.order_by('title')
+        elif sort_by == 'artist':
+            songs = songs.order_by('artist')
+        elif sort_by == 'release_date':
+            songs = songs.order_by('-release_date')
+        elif sort_by == 'popularity':
+            songs = songs.order_by('-play_count')
+        
+        # Phân trang
+        page_size = int(request.query_params.get('page_size', 20))
+        page = int(request.query_params.get('page', 1))
+        start = (page - 1) * page_size
+        end = start + page_size
+        
+        serializer = self.get_serializer(songs[start:end], many=True)
+        
+        return Response({
+            'total': songs.count(),
+            'page': page, 
+            'page_size': page_size,
+            'results': serializer.data
+        })
 
 class SongUploadView(APIView):
     """Upload bài hát mới"""
@@ -388,11 +520,16 @@ class AlbumViewSet(viewsets.ModelViewSet):
         Cho phép người dùng chưa đăng nhập xem thông tin album,
         nhưng chỉ người dùng đã đăng nhập mới có thể thao tác.
         """
-        if self.action in ['list', 'retrieve', 'songs']:
+        if self.action in ['list', 'retrieve', 'songs', 'related']:
             permission_classes = [AllowAny]
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
+    
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return AlbumDetailSerializer
+        return AlbumSerializer
     
     @action(detail=True, methods=['get'], permission_classes=[AllowAny])
     def songs(self, request, pk=None):
@@ -400,6 +537,23 @@ class AlbumViewSet(viewsets.ModelViewSet):
         album = self.get_object()
         songs = Song.objects.filter(album=album.title)
         serializer = SongSerializer(songs, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'], permission_classes=[AllowAny])
+    def related(self, request, pk=None):
+        """Lấy danh sách album liên quan"""
+        album = self.get_object()
+        # Lấy album cùng nghệ sĩ
+        related_albums = Album.objects.filter(artist=album.artist).exclude(id=album.id)[:5]
+        serializer = AlbumSerializer(related_albums, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def new(self, request):
+        """Lấy album mới phát hành"""
+        three_months_ago = datetime.now().date() - timedelta(days=90)
+        new_albums = Album.objects.filter(release_date__gte=three_months_ago).order_by('-release_date')[:10]
+        serializer = self.get_serializer(new_albums, many=True)
         return Response(serializer.data)
 
 class GenreViewSet(viewsets.ModelViewSet):
@@ -412,18 +566,65 @@ class GenreViewSet(viewsets.ModelViewSet):
         Cho phép người dùng chưa đăng nhập xem thông tin thể loại,
         nhưng chỉ người dùng đã đăng nhập mới có thể thao tác.
         """
-        if self.action in ['list', 'retrieve', 'songs']:
+        if self.action in ['list', 'retrieve', 'songs', 'artists']:
             permission_classes = [AllowAny]
         else:
             permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
     
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return GenreDetailSerializer
+        return GenreSerializer
+    
     @action(detail=True, methods=['get'], permission_classes=[AllowAny])
     def songs(self, request, pk=None):
-        """Lấy danh sách bài hát theo thể loại"""
+        """Lấy danh sách bài hát thuộc thể loại"""
         genre = self.get_object()
         songs = Song.objects.filter(genre=genre.name)
-        serializer = SongSerializer(songs, many=True)
+        
+        # Phân trang
+        page_size = int(request.query_params.get('page_size', 20))
+        page = int(request.query_params.get('page', 1))
+        start = (page - 1) * page_size
+        end = start + page_size
+        
+        serializer = SongSerializer(songs[start:end], many=True)
+        
+        return Response({
+            'total': songs.count(),
+            'page': page, 
+            'page_size': page_size,
+            'songs': serializer.data
+        })
+    
+    @action(detail=True, methods=['get'], permission_classes=[AllowAny])
+    def artists(self, request, pk=None):
+        """Lấy danh sách nghệ sĩ nổi bật trong thể loại"""
+        genre = self.get_object()
+        
+        # Lấy nghệ sĩ nổi bật trong thể loại này
+        artists = {}
+        for song in Song.objects.filter(genre=genre.name):
+            if song.artist in artists:
+                artists[song.artist] += 1
+            else:
+                artists[song.artist] = 1
+        
+        # Sắp xếp theo số lượng bài hát
+        top_artists = sorted(artists.items(), key=lambda x: x[1], reverse=True)[:10]
+        
+        return Response([
+            {'name': artist[0], 'songs_count': artist[1]} 
+            for artist in top_artists
+        ])
+    
+    @action(detail=True, methods=['get'], permission_classes=[AllowAny])
+    def top_songs(self, request, pk=None):
+        """Lấy danh sách bài hát nổi bật theo thể loại"""
+        genre = self.get_object()
+        top_songs = Song.objects.filter(genre=genre.name).order_by('-play_count')[:10]
+        serializer = SongSerializer(top_songs, many=True)
         return Response(serializer.data)
 
 class CommentViewSet(viewsets.ModelViewSet):
@@ -845,8 +1046,522 @@ class AdminUserActivityView(APIView):
                 'active_users': active_users_data,
             })
 
+class NewAlbumsView(APIView):
+    """Lấy danh sách album mới phát hành"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request, format=None):
+        # Lấy album phát hành trong 3 tháng gần nhất
+        three_months_ago = datetime.now().date() - timedelta(days=90)
+        new_albums = Album.objects.filter(release_date__gte=three_months_ago).order_by('-release_date')
+        
+        # Phân trang
+        page_size = int(request.query_params.get('page_size', 20))
+        page = int(request.query_params.get('page', 1))
+        start = (page - 1) * page_size
+        end = start + page_size
+        
+        serializer = AlbumSerializer(new_albums[start:end], many=True)
+        
+        return Response({
+            'total': new_albums.count(),
+            'page': page, 
+            'page_size': page_size,
+            'albums': serializer.data
+        })
+
+class FeaturedPlaylistsView(APIView):
+    """Lấy danh sách playlist được yêu thích nhất"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request, format=None):
+        # Lấy playlist công khai được nhiều người follow nhất
+        popular_playlists = Playlist.objects.filter(is_public=True).annotate(
+            followers_count=Count('followers')
+        ).order_by('-followers_count')
+        
+        # Phân trang
+        page_size = int(request.query_params.get('page_size', 20))
+        page = int(request.query_params.get('page', 1))
+        start = (page - 1) * page_size
+        end = start + page_size
+        
+        serializer = PlaylistSerializer(popular_playlists[start:end], many=True)
+        
+        return Response({
+            'total': popular_playlists.count(),
+            'page': page, 
+            'page_size': page_size,
+            'playlists': serializer.data
+        })
+
+class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
+    """ViewSet chỉ đọc cho nghệ sĩ"""
+    queryset = Artist.objects.all()
+    serializer_class = ArtistSerializer
+    permission_classes = [AllowAny]
+    
+    @action(detail=True, methods=['get'])
+    def songs(self, request, pk=None):
+        """Lấy danh sách bài hát của nghệ sĩ"""
+        artist = self.get_object()
+        songs = Song.objects.filter(artist=artist.name)
+        serializer = SongSerializer(songs, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['get'])
+    def albums(self, request, pk=None):
+        """Lấy danh sách album của nghệ sĩ"""
+        artist = self.get_object()
+        albums = Album.objects.filter(artist=artist.name)
+        serializer = AlbumSerializer(albums, many=True)
+        return Response(serializer.data)
+
+# Cho phép người dùng chưa đăng nhập xem trang chơi nhạc 
 def play_song(request):
     """Phương thức cho phép hiển thị trang chơi nhạc cho cả người dùng đã đăng nhập và chưa đăng nhập"""
     # Đường dẫn file mp3 mẫu, có thể lấy từ database sau
     song_url = '/media/songs/2025/04/28/TinhNho-ThanhHien-5825173_XH1ISay.mp3'
     return render(request, 'play_song.html', {'song_url': song_url})
+
+# Thêm các API cho Queue
+class QueueView(APIView):
+    """Xem hàng đợi phát nhạc hiện tại"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, format=None):
+        # Lấy hoặc tạo queue cho user
+        queue, created = Queue.objects.get_or_create(user=request.user)
+        serializer = QueueSerializer(queue)
+        return Response(serializer.data)
+
+class AddToQueueView(APIView):
+    """Thêm bài hát vào hàng đợi phát"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, format=None):
+        song_id = request.data.get('song_id')
+        if not song_id:
+            return Response({'error': 'Cần cung cấp ID bài hát'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Kiểm tra bài hát tồn tại
+        try:
+            song = Song.objects.get(id=song_id)
+        except Song.DoesNotExist:
+            return Response({'error': 'Bài hát không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Lấy hoặc tạo queue cho user
+        queue, created = Queue.objects.get_or_create(user=request.user)
+        
+        # Vị trí cuối cùng trong queue
+        last_position = QueueItem.objects.filter(queue=queue).order_by('-position').first()
+        position = 1 if not last_position else last_position.position + 1
+        
+        # Tạo queue item mới
+        queue_item = QueueItem.objects.create(
+            queue=queue,
+            song=song,
+            position=position
+        )
+        
+        return Response({'status': 'Đã thêm vào hàng đợi', 'position': position})
+
+class RemoveFromQueueView(APIView):
+    """Xóa bài hát khỏi hàng đợi phát"""
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, position, format=None):
+        # Lấy queue của user
+        try:
+            queue = Queue.objects.get(user=request.user)
+        except Queue.DoesNotExist:
+            return Response({'error': 'Queue không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Xóa bài hát ở vị trí chỉ định
+        try:
+            queue_item = QueueItem.objects.get(queue=queue, position=position)
+            queue_item.delete()
+            
+            # Cập nhật lại vị trí các bài hát trong queue
+            items = QueueItem.objects.filter(queue=queue, position__gt=position).order_by('position')
+            for item in items:
+                item.position -= 1
+                item.save()
+            
+            return Response({'status': 'Đã xóa khỏi hàng đợi'})
+        except QueueItem.DoesNotExist:
+            return Response({'error': 'Không tìm thấy bài hát ở vị trí này'}, status=status.HTTP_404_NOT_FOUND)
+
+class ClearQueueView(APIView):
+    """Xóa toàn bộ hàng đợi phát"""
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, format=None):
+        # Lấy queue của user
+        try:
+            queue = Queue.objects.get(user=request.user)
+            QueueItem.objects.filter(queue=queue).delete()
+            return Response({'status': 'Đã xóa toàn bộ hàng đợi'})
+        except Queue.DoesNotExist:
+            return Response({'error': 'Queue không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+
+# Thêm API cho User Status
+class UserStatusView(APIView):
+    """Xem và cập nhật trạng thái nghe nhạc"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, format=None):
+        # Lấy hoặc tạo status cho user
+        status_obj, created = UserStatus.objects.get_or_create(user=request.user)
+        serializer = UserStatusSerializer(status_obj)
+        return Response(serializer.data)
+    
+    def put(self, request, format=None):
+        # Cập nhật status cho user
+        status_obj, created = UserStatus.objects.get_or_create(user=request.user)
+        
+        data = {}
+        if 'currently_playing' in request.data:
+            try:
+                song = Song.objects.get(id=request.data['currently_playing'])
+                data['currently_playing'] = song
+            except Song.DoesNotExist:
+                pass
+        
+        if 'status_text' in request.data:
+            data['status_text'] = request.data['status_text']
+        
+        if 'is_listening' in request.data:
+            data['is_listening'] = request.data['is_listening']
+        
+        for key, value in data.items():
+            setattr(status_obj, key, value)
+        
+        status_obj.save()
+        serializer = UserStatusSerializer(status_obj)
+        return Response(serializer.data)
+
+# Thêm API cho Messaging và Sharing
+class MessageListView(APIView):
+    """Xem tin nhắn"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, format=None):
+        # Lấy tin nhắn đã nhận
+        received = Message.objects.filter(receiver=request.user).order_by('-timestamp')
+        # Lấy tin nhắn đã gửi
+        sent = Message.objects.filter(sender=request.user).order_by('-timestamp')
+        
+        # Đánh dấu tin nhắn đã đọc
+        for msg in received.filter(is_read=False):
+            msg.is_read = True
+            msg.save()
+        
+        received_serializer = MessageSerializer(received, many=True)
+        sent_serializer = MessageSerializer(sent, many=True)
+        
+        return Response({
+            'received': received_serializer.data,
+            'sent': sent_serializer.data
+        })
+
+class SendMessageView(APIView):
+    """Gửi tin nhắn"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, format=None):
+        receiver_id = request.data.get('receiver_id')
+        content = request.data.get('content')
+        
+        if not receiver_id or not content:
+            return Response({
+                'error': 'Cần cung cấp ID người nhận và nội dung tin nhắn'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            receiver = User.objects.get(id=receiver_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Người nhận không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        
+        message = Message.objects.create(
+            sender=request.user,
+            receiver=receiver,
+            content=content,
+            message_type='TEXT'
+        )
+        
+        serializer = MessageSerializer(message)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+class ShareSongView(APIView):
+    """Chia sẻ bài hát với bạn bè"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, song_id, format=None):
+        receiver_id = request.data.get('receiver_id')
+        content = request.data.get('content', '')
+        
+        if not receiver_id:
+            return Response({
+                'error': 'Cần cung cấp ID người nhận'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            receiver = User.objects.get(id=receiver_id)
+            song = Song.objects.get(id=song_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Người nhận không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        except Song.DoesNotExist:
+            return Response({'error': 'Bài hát không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        
+        message = Message.objects.create(
+            sender=request.user,
+            receiver=receiver,
+            content=content,
+            message_type='SONG',
+            shared_song=song
+        )
+        
+        serializer = MessageSerializer(message)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+class SharePlaylistView(APIView):
+    """Chia sẻ playlist với bạn bè"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, playlist_id, format=None):
+        receiver_id = request.data.get('receiver_id')
+        content = request.data.get('content', '')
+        
+        if not receiver_id:
+            return Response({
+                'error': 'Cần cung cấp ID người nhận'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            receiver = User.objects.get(id=receiver_id)
+            playlist = Playlist.objects.get(id=playlist_id)
+        except User.DoesNotExist:
+            return Response({'error': 'Người nhận không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        except Playlist.DoesNotExist:
+            return Response({'error': 'Playlist không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        
+        message = Message.objects.create(
+            sender=request.user,
+            receiver=receiver,
+            content=content,
+            message_type='PLAYLIST',
+            shared_playlist=playlist
+        )
+        
+        serializer = MessageSerializer(message)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+# Thêm API cho thống kê và xu hướng cá nhân
+class UserStatisticsView(APIView):
+    """Thống kê thời gian nghe theo thể loại"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, format=None):
+        user = request.user
+        
+        # Lấy tổng số bài hát đã nghe
+        total_plays = SongPlayHistory.objects.filter(user=user).count()
+        
+        # Thống kê theo thể loại
+        genre_stats = {}
+        for play in SongPlayHistory.objects.filter(user=user).select_related('song'):
+            genre = play.song.genre
+            if genre in genre_stats:
+                genre_stats[genre] += 1
+            else:
+                genre_stats[genre] = 1
+        
+        # Sắp xếp theo số lượt nghe
+        sorted_genres = sorted(genre_stats.items(), key=lambda x: x[1], reverse=True)
+        
+        # Tỷ lệ phần trăm theo thể loại
+        genre_percentages = []
+        for genre, count in sorted_genres:
+            percentage = (count / total_plays) * 100 if total_plays > 0 else 0
+            genre_percentages.append({
+                'genre': genre,
+                'count': count,
+                'percentage': round(percentage, 2)
+            })
+        
+        # Thời gian nghe trung bình mỗi ngày
+        return Response({
+            'total_plays': total_plays,
+            'genre_stats': genre_percentages,
+        })
+
+class PersonalTrendsView(APIView):
+    """Xu hướng nghe nhạc cá nhân"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, format=None):
+        user = request.user
+        
+        # Bài hát nghe gần đây nhất
+        recent_plays = SongPlayHistory.objects.filter(user=user).order_by('-played_at')[:10]
+        recent_serializer = SongPlayHistorySerializer(recent_plays, many=True)
+        
+        # Thể loại nghe nhiều nhất trong 30 ngày qua
+        last_month = datetime.now() - timedelta(days=30)
+        genre_count = {}
+        
+        for play in SongPlayHistory.objects.filter(user=user, played_at__gte=last_month).select_related('song'):
+            genre = play.song.genre
+            if genre in genre_count:
+                genre_count[genre] += 1
+            else:
+                genre_count[genre] = 1
+        
+        top_genres = sorted(genre_count.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        # Sắp xếp top_genres thành danh sách dict
+        top_genres_list = [{'genre': genre, 'count': count} for genre, count in top_genres]
+        
+        return Response({
+            'recent_plays': recent_serializer.data,
+            'top_genres': top_genres_list
+        })
+
+# Thêm API cho đề xuất cá nhân hóa
+class RecommendationsView(APIView):
+    """Đề xuất bài hát dựa trên lịch sử nghe"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, format=None):
+        user = request.user
+        
+        # Lấy 5 thể loại nghe nhiều nhất
+        genre_count = {}
+        for play in SongPlayHistory.objects.filter(user=user).select_related('song'):
+            genre = play.song.genre
+            if genre in genre_count:
+                genre_count[genre] += 1
+            else:
+                genre_count[genre] = 1
+        
+        top_genres = sorted(genre_count.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_genres = [genre for genre, _ in top_genres]
+        
+        # Lấy bài hát đã nghe
+        played_songs = SongPlayHistory.objects.filter(user=user).values_list('song_id', flat=True)
+        
+        # Đề xuất bài hát từ thể loại yêu thích mà chưa nghe
+        recommendations = Song.objects.filter(genre__in=top_genres).exclude(id__in=played_songs).order_by('-play_count')[:20]
+        
+        serializer = SongSerializer(recommendations, many=True)
+        return Response(serializer.data)
+
+class LikedBasedRecommendationsView(APIView):
+    """Đề xuất bài hát dựa trên bài hát đã thích"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, format=None):
+        user = request.user
+        
+        # Lấy thể loại từ bài hát đã thích
+        liked_songs = user.favorite_songs.all()
+        if not liked_songs.exists():
+            return Response([])
+        
+        genre_count = {}
+        for song in liked_songs:
+            genre = song.genre
+            if genre in genre_count:
+                genre_count[genre] += 1
+            else:
+                genre_count[genre] = 1
+        
+        top_genres = sorted(genre_count.items(), key=lambda x: x[1], reverse=True)[:3]
+        top_genres = [genre for genre, _ in top_genres]
+        
+        # Lấy bài hát từ thể loại tương tự nhưng chưa thích
+        liked_ids = liked_songs.values_list('id', flat=True)
+        recommendations = Song.objects.filter(genre__in=top_genres).exclude(id__in=liked_ids).order_by('-likes_count')[:15]
+        
+        serializer = SongSerializer(recommendations, many=True)
+        return Response(serializer.data)
+
+class YouMayLikeView(APIView):
+    """Gợi ý 'Có thể bạn sẽ thích'"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, format=None):
+        user = request.user
+        
+        # Lấy tất cả bài hát đã nghe
+        played_ids = SongPlayHistory.objects.filter(user=user).values_list('song_id', flat=True)
+        
+        # Lấy tất cả bài hát đã thích
+        liked_ids = user.favorite_songs.values_list('id', flat=True)
+        
+        # Loại bỏ những bài đã nghe hoặc đã thích
+        excluded_ids = list(played_ids) + list(liked_ids)
+        
+        # Lấy bài hát phổ biến mà user chưa nghe
+        popular_songs = Song.objects.exclude(id__in=excluded_ids).order_by('-play_count', '-likes_count')[:10]
+        
+        serializer = SongSerializer(popular_songs, many=True)
+        return Response(serializer.data)
+
+# Thêm API cho lịch sử
+class PlayHistoryView(APIView):
+    """Xem lịch sử nghe nhạc"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, format=None):
+        user = request.user
+        
+        # Lấy lịch sử phát
+        history = SongPlayHistory.objects.filter(user=user).order_by('-played_at')
+        
+        # Phân trang
+        page_size = int(request.query_params.get('page_size', 20))
+        page = int(request.query_params.get('page', 1))
+        start = (page - 1) * page_size
+        end = start + page_size
+        
+        serializer = SongPlayHistorySerializer(history[start:end], many=True)
+        
+        return Response({
+            'total': history.count(),
+            'page': page, 
+            'page_size': page_size,
+            'history': serializer.data
+        })
+
+class SearchHistoryView(APIView):
+    """Xem lịch sử tìm kiếm"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, format=None):
+        user = request.user
+        
+        # Lấy lịch sử tìm kiếm
+        history = SearchHistory.objects.filter(user=user).order_by('-timestamp')
+        
+        # Phân trang
+        page_size = int(request.query_params.get('page_size', 20))
+        page = int(request.query_params.get('page', 1))
+        start = (page - 1) * page_size
+        end = start + page_size
+        
+        serializer = SearchHistorySerializer(history[start:end], many=True)
+        
+        return Response({
+            'total': history.count(),
+            'page': page, 
+            'page_size': page_size,
+            'history': serializer.data
+        })
+    
+    def delete(self, request, format=None):
+        """Xóa lịch sử tìm kiếm"""
+        user = request.user
+        SearchHistory.objects.filter(user=user).delete()
+        return Response({'status': 'Đã xóa lịch sử tìm kiếm'}, status=status.HTTP_204_NO_CONTENT)

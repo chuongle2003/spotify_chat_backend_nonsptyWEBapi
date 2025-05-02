@@ -16,6 +16,7 @@ class Song(models.Model):
     uploaded_by = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     lyrics = models.TextField(blank=True)
+    release_date = models.DateField(null=True, blank=True)
     
     class Meta:
         db_table = 'songs'
@@ -125,6 +126,7 @@ class Album(models.Model):
 class Genre(models.Model):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
+    image = models.ImageField(upload_to='genre_images/', null=True, blank=True)
     
     class Meta:
         db_table = 'genres'
@@ -136,9 +138,14 @@ class SearchHistory(models.Model):
 
 class Comment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    song = models.ForeignKey(Song, on_delete=models.CASCADE)
+    song = models.ForeignKey(Song, on_delete=models.CASCADE, related_name='comments')
     content = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='replies')
+
+    class Meta:
+        db_table = 'comments'
+        ordering = ['-created_at']
 
 class Rating(models.Model):
     RATING_CHOICES = [
@@ -176,3 +183,57 @@ class LyricLine(models.Model):
         minutes = int(self.timestamp // 60)
         seconds = self.timestamp % 60
         return f"{minutes:02d}:{seconds:05.2f}"
+
+class Artist(models.Model):
+    """Model cho nghệ sĩ"""
+    name = models.CharField(max_length=200)
+    bio = models.TextField(blank=True)
+    image = models.ImageField(upload_to='artist_images/', null=True, blank=True)
+    
+    class Meta:
+        db_table = 'artists'
+        
+    def __str__(self):
+        return self.name
+
+class Queue(models.Model):
+    """Model lưu trữ hàng đợi phát nhạc của người dùng"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='queue')
+    songs = models.ManyToManyField(Song, through='QueueItem')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'queues'
+        
+    def __str__(self):
+        return f"Queue for {self.user.username}"
+
+class QueueItem(models.Model):
+    """Model lưu trữ từng bài hát trong hàng đợi"""
+    queue = models.ForeignKey(Queue, on_delete=models.CASCADE)
+    song = models.ForeignKey(Song, on_delete=models.CASCADE)
+    position = models.PositiveIntegerField()
+    added_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'queue_items'
+        ordering = ['position']
+        unique_together = ['queue', 'position']
+        
+    def __str__(self):
+        return f"{self.position}. {self.song.title} in {self.queue}"
+
+class UserStatus(models.Model):
+    """Model lưu trạng thái hiện tại của người dùng"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='music_status')
+    currently_playing = models.ForeignKey(Song, on_delete=models.SET_NULL, null=True, blank=True)
+    status_text = models.CharField(max_length=255, blank=True)
+    is_listening = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        db_table = 'user_statuses'
+        
+    def __str__(self):
+        return f"Status for {self.user.username}"

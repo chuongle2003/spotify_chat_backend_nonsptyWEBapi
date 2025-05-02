@@ -79,6 +79,18 @@
             "value": "1",
             "type": "default",
             "enabled": true
+        },
+        {
+            "key": "artist_id",
+            "value": "1",
+            "type": "default",
+            "enabled": true
+        },
+        {
+            "key": "is_public_access",
+            "value": "true",
+            "type": "default",
+            "enabled": true
         }
     ],
     "_postman_variable_scope": "environment",

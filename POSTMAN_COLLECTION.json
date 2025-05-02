@@ -1267,7 +1267,7 @@
                                         ""
                                     ]
                                 },
-                                "description": "Phát bài hát qua HTML player (yêu cầu đăng nhập để ghi nhận lượt nghe)"
+                                "description": "Truy cập trang phát nhạc (được phép cho mọi người dùng)"
                             },
                             "response": [],
                             "event": [
@@ -1358,7 +1358,7 @@
                                         ""
                                     ]
                                 },
-                                "description": "Lấy danh sách playlist"
+                                "description": "Lấy danh sách playlist công khai (không cần đăng nhập)"
                             },
                             "response": [],
                             "event": [
@@ -2088,6 +2088,857 @@
                             }
                         }
                     ]
+                }
+            ]
+        },
+        {
+            "name": "Public Music APIs",
+            "description": "Các API âm nhạc có thể truy cập mà không cần xác thực",
+            "item": [
+                {
+                    "name": "Home Page",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/home/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "home",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy dữ liệu trang chủ tổng hợp (không cần đăng nhập)"
+                    }
+                },
+                {
+                    "name": "List Songs",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/songs/?page=1&page_size=10",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "songs",
+                                ""
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "page_size",
+                                    "value": "10"
+                                }
+                            ]
+                        },
+                        "description": "Lấy danh sách bài hát (không cần đăng nhập)"
+                    }
+                },
+                {
+                    "name": "Filter Songs",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/songs/filter/?genre=Pop&sort=popularity",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "songs",
+                                "filter",
+                                ""
+                            ],
+                            "query": [
+                                {
+                                    "key": "genre",
+                                    "value": "Pop"
+                                },
+                                {
+                                    "key": "sort",
+                                    "value": "popularity"
+                                }
+                            ]
+                        },
+                        "description": "Lọc bài hát theo nhiều tiêu chí (không cần đăng nhập)"
+                    }
+                },
+                {
+                    "name": "New Albums",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/albums/new/?page=1&page_size=10",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "albums",
+                                "new",
+                                ""
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "page_size",
+                                    "value": "10"
+                                }
+                            ]
+                        },
+                        "description": "Lấy album mới phát hành (không cần đăng nhập)"
+                    }
+                },
+                {
+                    "name": "Featured Playlists",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/playlists/featured/?page=1&page_size=10",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "playlists",
+                                "featured",
+                                ""
+                            ],
+                            "query": [
+                                {
+                                    "key": "page",
+                                    "value": "1"
+                                },
+                                {
+                                    "key": "page_size",
+                                    "value": "10"
+                                }
+                            ]
+                        },
+                        "description": "Lấy playlist được yêu thích nhất (không cần đăng nhập)"
+                    }
+                },
+                {
+                    "name": "Trending Songs",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/songs/trending/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "songs",
+                                "trending",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy danh sách bài hát xu hướng (không cần đăng nhập)"
+                    }
+                },
+                {
+                    "name": "Search Music",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/search/?q=example",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "search",
+                                ""
+                            ],
+                            "query": [
+                                {
+                                    "key": "q",
+                                    "value": "example"
+                                }
+                            ]
+                        },
+                        "description": "Tìm kiếm bài hát, album, playlist (không cần đăng nhập)"
+                    }
+                },
+                {
+                    "name": "Genre Top Songs",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/genres/{{genre_id}}/top_songs/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "genres",
+                                "{{genre_id}}",
+                                "top_songs",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy bài hát nổi bật theo thể loại (không cần đăng nhập)"
+                    }
+                },
+                {
+                    "name": "Genre Artists",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/genres/{{genre_id}}/artists/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "genres",
+                                "{{genre_id}}",
+                                "artists",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy danh sách nghệ sĩ nổi bật trong thể loại (không cần đăng nhập)"
+                    }
+                },
+                {
+                    "name": "Album Related",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/albums/{{album_id}}/related/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "albums",
+                                "{{album_id}}",
+                                "related",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy danh sách album liên quan (không cần đăng nhập)"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "User Music Features",
+            "description": "Các tính năng âm nhạc cá nhân hóa cho người dùng đã đăng nhập",
+            "item": [
+                {
+                    "name": "Queue Management",
+                    "item": [
+                        {
+                            "name": "Get Queue",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/queue/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "queue",
+                                        ""
+                                    ]
+                                },
+                                "description": "Xem hàng đợi phát nhạc hiện tại"
+                            }
+                        },
+                        {
+                            "name": "Add to Queue",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"song_id\": {{song_id}}\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/queue/add/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "queue",
+                                        "add",
+                                        ""
+                                    ]
+                                },
+                                "description": "Thêm bài hát vào hàng đợi phát (yêu cầu đăng nhập)"
+                            }
+                        },
+                        {
+                            "name": "Remove from Queue",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/queue/remove/1/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "queue",
+                                        "remove",
+                                        "1",
+                                        ""
+                                    ]
+                                },
+                                "description": "Xóa bài hát khỏi hàng đợi phát (yêu cầu đăng nhập)"
+                            }
+                        },
+                        {
+                            "name": "Clear Queue",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/queue/clear/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "queue",
+                                        "clear",
+                                        ""
+                                    ]
+                                },
+                                "description": "Xóa toàn bộ hàng đợi phát (yêu cầu đăng nhập)"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "User Status",
+                    "item": [
+                        {
+                            "name": "Get Status",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/status/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "status",
+                                        ""
+                                    ]
+                                },
+                                "description": "Xem trạng thái nghe nhạc hiện tại"
+                            }
+                        },
+                        {
+                            "name": "Update Status",
+                            "request": {
+                                "method": "PUT",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
+                                    "raw": "{\n  \"currently_playing\": {{song_id}},\n  \"status_text\": \"Đang nghe nhạc\",\n  \"is_listening\": true\n}"
+                                },
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/status/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "status",
+                                        ""
+                                    ]
+                                },
+                                "description": "Cập nhật trạng thái nghe nhạc (yêu cầu đăng nhập)"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Personalized Recommendations",
+                    "item": [
+                        {
+                            "name": "Get Recommendations",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/recommendations/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "recommendations",
+                                        ""
+                                    ]
+                                },
+                                "description": "Lấy đề xuất bài hát dựa trên lịch sử nghe"
+                            }
+                        },
+                        {
+                            "name": "Liked Based Recommendations",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/recommendations/liked/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "recommendations",
+                                        "liked",
+                                        ""
+                                    ]
+                                },
+                                "description": "Lấy đề xuất bài hát dựa trên bài hát đã thích"
+                            }
+                        },
+                        {
+                            "name": "You May Like",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/recommendations/may-like/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "recommendations",
+                                        "may-like",
+                                        ""
+                                    ]
+                                },
+                                "description": "Lấy gợi ý \"Có thể bạn sẽ thích\""
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "History",
+                    "item": [
+                        {
+                            "name": "Play History",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/history/?page=1&page_size=20",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "history",
+                                        ""
+                                    ],
+                                    "query": [
+                                        {
+                                            "key": "page",
+                                            "value": "1"
+                                        },
+                                        {
+                                            "key": "page_size",
+                                            "value": "20"
+                                        }
+                                    ]
+                                },
+                                "description": "Xem lịch sử nghe nhạc"
+                            }
+                        },
+                        {
+                            "name": "Search History",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/history/search/?page=1&page_size=20",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "history",
+                                        "search",
+                                        ""
+                                    ],
+                                    "query": [
+                                        {
+                                            "key": "page",
+                                            "value": "1"
+                                        },
+                                        {
+                                            "key": "page_size",
+                                            "value": "20"
+                                        }
+                                    ]
+                                },
+                                "description": "Xem lịch sử tìm kiếm"
+                            }
+                        },
+                        {
+                            "name": "Clear Search History",
+                            "request": {
+                                "method": "DELETE",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/history/search/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "history",
+                                        "search",
+                                        ""
+                                    ]
+                                },
+                                "description": "Xóa lịch sử tìm kiếm"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "name": "Statistics and Trends",
+                    "item": [
+                        {
+                            "name": "User Statistics",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/statistics/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "statistics",
+                                        ""
+                                    ]
+                                },
+                                "description": "Thống kê thời gian nghe theo thể loại"
+                            }
+                        },
+                        {
+                            "name": "Personal Trends",
+                            "request": {
+                                "method": "GET",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    }
+                                ],
+                                "url": {
+                                    "raw": "{{base_url}}/api/v1/music/trends/personal/",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
+                                        "trends",
+                                        "personal",
+                                        ""
+                                    ]
+                                },
+                                "description": "Xu hướng nghe nhạc cá nhân"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Messaging and Sharing",
+            "description": "Các tính năng tin nhắn và chia sẻ nhạc",
+            "item": [
+                {
+                    "name": "List Messages",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/messages/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "messages",
+                                ""
+                            ]
+                        },
+                        "description": "Xem tin nhắn đã gửi và đã nhận"
+                    }
+                },
+                {
+                    "name": "Send Message",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"receiver_id\": {{recipient_id}},\n  \"content\": \"Xin chào!\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/messages/send/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "messages",
+                                "send",
+                                ""
+                            ]
+                        },
+                        "description": "Gửi tin nhắn đến người dùng khác"
+                    }
+                },
+                {
+                    "name": "Share Song",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"receiver_id\": {{recipient_id}},\n  \"content\": \"Bài hát hay nè!\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/share/song/{{song_id}}/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "share",
+                                "song",
+                                "{{song_id}}",
+                                ""
+                            ]
+                        },
+                        "description": "Chia sẻ bài hát với người dùng khác"
+                    }
+                },
+                {
+                    "name": "Share Playlist",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Authorization",
+                                "value": "Bearer {{token}}"
+                            },
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"receiver_id\": {{recipient_id}},\n  \"content\": \"Playlist mới của mình!\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/share/playlist/{{playlist_id}}/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "share",
+                                "playlist",
+                                "{{playlist_id}}",
+                                ""
+                            ]
+                        },
+                        "description": "Chia sẻ playlist với người dùng khác"
+                    }
                 }
             ]
         }

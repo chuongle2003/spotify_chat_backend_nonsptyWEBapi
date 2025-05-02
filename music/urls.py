@@ -12,9 +12,15 @@ router.register(r'albums', views.AlbumViewSet)
 router.register(r'genres', views.GenreViewSet)
 router.register(r'comments', views.CommentViewSet)
 router.register(r'ratings', views.RatingViewSet)
+router.register(r'artists', views.ArtistViewSet)
 
 urlpatterns = [
     path('', include(router.urls)),
+    
+    # Trang chủ và khám phá nhạc
+    path('home/', views.HomePageView.as_view(), name='home'),
+    path('albums/new/', views.NewAlbumsView.as_view(), name='albums-new'),
+    path('playlists/featured/', views.FeaturedPlaylistsView.as_view(), name='featured-playlists'),
     
     # Public URLs
     path('public/playlists/', views.PublicPlaylistView.as_view(), name='public-playlists'),
@@ -32,6 +38,34 @@ urlpatterns = [
     path('trending/', views.TrendingSongsView.as_view(), name='trending'),
     path('recommended/', views.RecommendedSongsView.as_view(), name='recommended'),
     path('library/', views.UserLibraryView.as_view(), name='user-library'),
+    
+    # Queue và Player
+    path('queue/', views.QueueView.as_view(), name='queue'),
+    path('queue/add/', views.AddToQueueView.as_view(), name='add-to-queue'),
+    path('queue/remove/<int:position>/', views.RemoveFromQueueView.as_view(), name='remove-from-queue'),
+    path('queue/clear/', views.ClearQueueView.as_view(), name='clear-queue'),
+    
+    # User status
+    path('status/', views.UserStatusView.as_view(), name='user-status'),
+    
+    # Chat và chia sẻ nhạc
+    path('messages/', views.MessageListView.as_view(), name='messages'),
+    path('messages/send/', views.SendMessageView.as_view(), name='send-message'),
+    path('share/song/<int:song_id>/', views.ShareSongView.as_view(), name='share-song'),
+    path('share/playlist/<int:playlist_id>/', views.SharePlaylistView.as_view(), name='share-playlist'),
+    
+    # Thống kê và xu hướng cá nhân
+    path('statistics/', views.UserStatisticsView.as_view(), name='user-statistics'),
+    path('trends/personal/', views.PersonalTrendsView.as_view(), name='personal-trends'),
+    
+    # Đề xuất cá nhân hóa
+    path('recommendations/', views.RecommendationsView.as_view(), name='recommendations'),
+    path('recommendations/liked/', views.LikedBasedRecommendationsView.as_view(), name='liked-recommendations'),
+    path('recommendations/may-like/', views.YouMayLikeView.as_view(), name='may-like'),
+    
+    # Lịch sử
+    path('history/', views.PlayHistoryView.as_view(), name='play-history'),
+    path('history/search/', views.SearchHistoryView.as_view(), name='search-history'),
     
     # Lyrics management
     path('songs/<int:song_id>/lyrics/synced/', views.SyncedLyricsView.as_view(), name='synced-lyrics'),
