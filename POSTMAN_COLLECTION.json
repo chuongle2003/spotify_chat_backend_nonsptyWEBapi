@@ -1704,35 +1704,35 @@
                                 },
                                 {
                                     "name": "Create Genre",
-                            "request": {
-                                "method": "POST",
-                                "header": [
-                                    {
-                                        "key": "Authorization",
-                                        "value": "Bearer {{token}}"
-                                    },
-                                    {
-                                        "key": "Content-Type",
-                                        "value": "application/json"
-                                    }
-                                ],
-                                "body": {
-                                    "mode": "raw",
+                                    "request": {
+                                        "method": "POST",
+                                        "header": [
+                                            {
+                                                "key": "Authorization",
+                                                "value": "Bearer {{token}}"
+                                            },
+                                            {
+                                                "key": "Content-Type",
+                                                "value": "application/json"
+                                            }
+                                        ],
+                                        "body": {
+                                            "mode": "raw",
                                             "raw": "{\n  \"name\": \"Alternative Rock\",\n  \"description\": \"Alternative rock is a category of rock music that emerged from the independent music underground...\"\n}"
-                                },
-                                "url": {
+                                        },
+                                        "url": {
                                             "raw": "{{base_url}}/api/v1/music/genres/",
-                                    "host": [
-                                        "{{base_url}}"
-                                    ],
-                                    "path": [
-                                        "api",
-                                        "v1",
-                                        "music",
+                                            "host": [
+                                                "{{base_url}}"
+                                            ],
+                                            "path": [
+                                                "api",
+                                                "v1",
+                                                "music",
                                                 "genres",
-                                        ""
-                                    ]
-                                },
+                                                ""
+                                            ]
+                                        },
                                         "description": "Tạo thể loại nhạc mới (yêu cầu quyền Admin)"
                                     }
                                 },
@@ -2938,6 +2938,101 @@
                             ]
                         },
                         "description": "Chia sẻ playlist với người dùng khác"
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Nghệ sĩ (Artists)",
+            "description": "Các endpoint quản lý nghệ sĩ",
+            "item": [
+                {
+                    "name": "Danh sách nghệ sĩ",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/artists/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "artists",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy danh sách tất cả nghệ sĩ (không yêu cầu đăng nhập)"
+                    }
+                },
+                {
+                    "name": "Chi tiết nghệ sĩ",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/artists/{{artist_id}}/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "artists",
+                                "{{artist_id}}",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy thông tin chi tiết của nghệ sĩ (không yêu cầu đăng nhập)"
+                    }
+                },
+                {
+                    "name": "Bài hát của nghệ sĩ",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/artists/{{artist_id}}/songs/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "artists",
+                                "{{artist_id}}",
+                                "songs",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy danh sách bài hát của nghệ sĩ (không yêu cầu đăng nhập)"
+                    }
+                },
+                {
+                    "name": "Album của nghệ sĩ",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{base_url}}/api/v1/music/artists/{{artist_id}}/albums/",
+                            "host": [
+                                "{{base_url}}"
+                            ],
+                            "path": [
+                                "api",
+                                "v1",
+                                "music",
+                                "artists",
+                                "{{artist_id}}",
+                                "albums",
+                                ""
+                            ]
+                        },
+                        "description": "Lấy danh sách album của nghệ sĩ (không yêu cầu đăng nhập)"
                     }
                 }
             ]

@@ -18,7 +18,7 @@ from .serializers import (
 )
 from django.urls import reverse
 from django.contrib.auth import get_user_model
-from django.db.models import Q, Count, Avg, Sum
+from django.db.models import Q, Count, Avg, Sum, F
 import random
 from datetime import datetime, timedelta
 import django.utils.timezone
@@ -186,17 +186,14 @@ class SongViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def trending(self, request):
-        """Lấy danh sách bài hát trending dựa trên lượt play gần đây"""
-        # Tham số từ request
-        days = int(request.query_params.get('days', 7))  # Mặc định 7 ngày
-        limit = int(request.query_params.get('limit', 10))  # Mặc định 10 bài
-        genre = request.query_params.get('genre', None)  # Lọc theo thể loại (tùy chọn)
+        """Lấy bài hát xu hướng (trending) dựa trên số lượt phát gần đây"""
+        # Số ngày để xác định xu hướng
+        days = int(request.query_params.get('days', 7))
+        limit = int(request.query_params.get('limit', 10))
+        genre = request.query_params.get('genre', None)
         
-        # Giới hạn days để tránh truy vấn quá lớn
-        days = min(days, 30)
-        
-        # Thời điểm từ 'days' ngày trước đến hiện tại
-        start_date = datetime.now() - timedelta(days=days)
+        # Tính khoảng thời gian
+        start_date = django.utils.timezone.now() - timedelta(days=days)
         
         try:
             # Base query
@@ -212,7 +209,7 @@ class SongViewSet(viewsets.ModelViewSet):
             trending_songs = query.annotate(
                 recent_plays=Count('play_history')
             ).order_by('-recent_plays', '-likes_count')[:limit]
-            
+        
             # Nếu không có bài hát trending, trả về dựa trên likes_count và play_count
             if not trending_songs.exists():
                 trending_songs = Song.objects.all().order_by('-likes_count', '-play_count')[:limit]
@@ -1162,6 +1159,52 @@ class ArtistViewSet(viewsets.ReadOnlyModelViewSet):
         albums = Album.objects.filter(artist=artist.name)
         serializer = AlbumSerializer(albums, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def popular(self, request):
+        """Lấy danh sách nghệ sĩ phổ biến dựa trên số lượng bài hát và số lượt nghe"""
+        # Lấy số lượng bài hát theo nghệ sĩ
+        artists = Artist.objects.all()
+        
+        # Dictionary để lưu số lượng bài hát và lượt nghe cho mỗi nghệ sĩ
+        artists_data = []
+        
+        for artist in artists:
+            songs = Song.objects.filter(artist=artist.name)
+            song_count = songs.count()
+            play_count = songs.aggregate(total_plays=Sum('play_count'))['total_plays'] or 0
+            
+            artist_info = {
+                'artist': artist,
+                'song_count': song_count,
+                'play_count': play_count
+            }
+            artists_data.append(artist_info)
+        
+        # Sắp xếp theo số lượt nghe (nếu bằng nhau thì sắp theo số bài hát)
+        sorted_artists = sorted(
+            artists_data, 
+            key=lambda x: (x['play_count'], x['song_count']), 
+            reverse=True
+        )
+        
+        # Giới hạn số lượng trả về
+        limit = int(request.query_params.get('limit', 10))
+        popular_artists = sorted_artists[:limit]
+        
+        # Trả về dữ liệu với thông tin bổ sung
+        result = []
+        for artist_info in popular_artists:
+            # Tạo dữ liệu artist dưới dạng dict
+            artist_data = ArtistSerializer(artist_info['artist']).data
+            # Chuyển OrderedDict hoặc đối tượng khác thành dict tiêu chuẩn
+            artist_data = dict(artist_data)
+            # Thêm thông tin bổ sung vào dict
+            artist_data['song_count'] = artist_info['song_count']
+            artist_data['play_count'] = artist_info['play_count']
+            result.append(artist_data)
+            
+        return Response(result)
 
 # Cho phép người dùng chưa đăng nhập xem trang chơi nhạc 
 def play_song(request):
