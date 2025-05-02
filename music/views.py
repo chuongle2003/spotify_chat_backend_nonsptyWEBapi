@@ -187,16 +187,46 @@ class SongViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], permission_classes=[AllowAny])
     def trending(self, request):
         """Lấy danh sách bài hát trending dựa trên lượt play gần đây"""
-        # Lấy bài hát có nhiều lượt phát nhất trong 7 ngày qua
-        last_week = datetime.now() - timedelta(days=7)
-        trending_songs = Song.objects.filter(
-            songplayhistory__played_at__gte=last_week
-        ).annotate(
-            recent_plays=Count('songplayhistory')
-        ).order_by('-recent_plays', '-likes_count')[:10]
+        # Tham số từ request
+        days = int(request.query_params.get('days', 7))  # Mặc định 7 ngày
+        limit = int(request.query_params.get('limit', 10))  # Mặc định 10 bài
+        genre = request.query_params.get('genre', None)  # Lọc theo thể loại (tùy chọn)
         
+        # Giới hạn days để tránh truy vấn quá lớn
+        days = min(days, 30)
+        
+        # Thời điểm từ 'days' ngày trước đến hiện tại
+        start_date = datetime.now() - timedelta(days=days)
+        
+        # Base query
+        query = Song.objects.filter(
+            play_history__played_at__gte=start_date
+        )
+        
+        # Lọc theo thể loại nếu có
+        if genre:
+            query = query.filter(genre=genre)
+        
+        # Tính toán số lượt phát gần đây và sắp xếp
+        trending_songs = query.annotate(
+            recent_plays=Count('play_history')
+        ).order_by('-recent_plays', '-likes_count')[:limit]
+        
+        # Lấy thông tin chi tiết
         serializer = self.get_serializer(trending_songs, many=True)
-        return Response(serializer.data)
+        
+        # Thêm metadata về số lượt phát gần đây cho mỗi bài hát
+        result_data = serializer.data
+        for i, song in enumerate(trending_songs):
+            result_data[i]['recent_plays'] = SongPlayHistory.objects.filter(
+                song=song, 
+                played_at__gte=start_date
+            ).count()
+        
+        return Response({
+            'trending_period_days': days,
+            'results': result_data
+        })
     
     @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
     def recommended(self, request):
@@ -251,7 +281,7 @@ class SongViewSet(viewsets.ModelViewSet):
         songs = Song.objects.filter(
             Q(title__icontains=query) | 
             Q(artist__icontains=query) | 
-            Q(album__icontains=query) | 
+            Q(album__icontains=query) |
             Q(genre__icontains=query)
         )
         

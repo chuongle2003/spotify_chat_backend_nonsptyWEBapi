@@ -211,7 +211,7 @@ class SearchHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = SearchHistory
         fields = ('id', 'query', 'timestamp')
-        read_only_fields = ('user', 'timestamp')
+        read_only_fields = ('user', 'timestamp') 
 
 class LyricLineSerializer(serializers.ModelSerializer):
     class Meta:
