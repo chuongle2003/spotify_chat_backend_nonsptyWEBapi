@@ -22,15 +22,35 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class SongBasicSerializer(serializers.ModelSerializer):
     """Basic serializer for Song model when referenced in other serializers"""
+    cover_image = serializers.SerializerMethodField()
+    
     class Meta:
         model = Song
         fields = ('id', 'title', 'artist', 'cover_image', 'duration')
+        
+    def get_cover_image(self, obj):
+        if obj.cover_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_image.url)
+            return obj.cover_image.url
+        return None
 
 class PlaylistBasicSerializer(serializers.ModelSerializer):
     """Basic serializer for Playlist model when referenced in other serializers"""
+    cover_image = serializers.SerializerMethodField()
+    
     class Meta:
         model = Playlist
         fields = ('id', 'name', 'is_public', 'cover_image')
+        
+    def get_cover_image(self, obj):
+        if obj.cover_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_image.url)
+            return obj.cover_image.url
+        return None
 
 class UserBasicSerializer(serializers.ModelSerializer):
     """Basic user serializer for referencing in music models"""
@@ -58,16 +78,36 @@ class AlbumBasicSerializer(serializers.ModelSerializer):
 
 class SongSerializer(serializers.ModelSerializer):
     uploaded_by = UserBasicSerializer(read_only=True)
+    audio_file = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
     
     class Meta:
         model = Song
         fields = ('id', 'title', 'artist', 'album', 'duration', 'audio_file', 
                  'cover_image', 'genre', 'likes_count', 'play_count', 
                  'uploaded_by', 'created_at', 'release_date')
+                 
+    def get_audio_file(self, obj):
+        if obj.audio_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.audio_file.url)
+            return obj.audio_file.url
+        return None
+        
+    def get_cover_image(self, obj):
+        if obj.cover_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_image.url)
+            return obj.cover_image.url
+        return None
 
 class SongDetailSerializer(serializers.ModelSerializer):
     uploaded_by = UserBasicSerializer(read_only=True)
     comments_count = serializers.SerializerMethodField()
+    audio_file = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
     
     class Meta:
         model = Song
@@ -77,10 +117,27 @@ class SongDetailSerializer(serializers.ModelSerializer):
                  
     def get_comments_count(self, obj):
         return obj.comments.count()
+        
+    def get_audio_file(self, obj):
+        if obj.audio_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.audio_file.url)
+            return obj.audio_file.url
+        return None
+        
+    def get_cover_image(self, obj):
+        if obj.cover_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_image.url)
+            return obj.cover_image.url
+        return None
 
 class PlaylistSerializer(serializers.ModelSerializer):
     user = UserBasicSerializer(read_only=True)
     songs_count = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
     
     class Meta:
         model = Playlist
@@ -89,11 +146,20 @@ class PlaylistSerializer(serializers.ModelSerializer):
         
     def get_songs_count(self, obj):
         return obj.songs.count()
+        
+    def get_cover_image(self, obj):
+        if obj.cover_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_image.url)
+            return obj.cover_image.url
+        return None
 
 class PlaylistDetailSerializer(serializers.ModelSerializer):
     user = UserBasicSerializer(read_only=True)
     songs = SongSerializer(many=True, read_only=True)
     followers_count = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
     
     class Meta:
         model = Playlist
@@ -102,6 +168,14 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
         
     def get_followers_count(self, obj):
         return obj.followers.count()
+        
+    def get_cover_image(self, obj):
+        if obj.cover_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_image.url)
+            return obj.cover_image.url
+        return None
 
 class UserActivitySerializer(serializers.ModelSerializer):
     song = SongBasicSerializer(read_only=True)

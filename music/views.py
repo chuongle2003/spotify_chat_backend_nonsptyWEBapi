@@ -153,6 +153,16 @@ class SongViewSet(viewsets.ModelViewSet):
             return SongDetailSerializer
         return SongSerializer
     
+    def get_serializer(self, *args, **kwargs):
+        """Đảm bảo request context được truyền vào serializer"""
+        kwargs['context'] = self.get_serializer_context()
+        return super().get_serializer(*args, **kwargs)
+    
+    def get_serializer_context(self):
+        """Thêm request vào context của serializer"""
+        context = super().get_serializer_context()
+        return context
+    
     def perform_create(self, serializer):
         serializer.save(uploaded_by=self.request.user)
     
@@ -785,15 +795,15 @@ class UserLibraryView(APIView):
         
         # Lấy bài hát yêu thích
         favorite_songs = user.favorite_songs.all()
-        favorite_serializer = SongSerializer(favorite_songs, many=True)
+        favorite_serializer = SongSerializer(favorite_songs, many=True, context={'request': request})
         
         # Lấy playlist
         playlists = Playlist.objects.filter(user=user)
-        playlist_serializer = PlaylistSerializer(playlists, many=True)
+        playlist_serializer = PlaylistSerializer(playlists, many=True, context={'request': request})
         
         # Lấy playlist đang theo dõi
         followed_playlists = user.followed_playlists.all()
-        followed_serializer = PlaylistSerializer(followed_playlists, many=True)
+        followed_serializer = PlaylistSerializer(followed_playlists, many=True, context={'request': request})
         
         # Lấy lịch sử nghe gần đây
         recent_history = SongPlayHistory.objects.filter(
@@ -811,7 +821,7 @@ class UserLibraryView(APIView):
                 if len(recent_songs) >= 20:  # Giới hạn ở 20 bài khác nhau
                     break
         
-        recent_serializer = SongSerializer(recent_songs, many=True)
+        recent_serializer = SongSerializer(recent_songs, many=True, context={'request': request})
         
         return Response({
             'favorite_songs': favorite_serializer.data,
@@ -1586,7 +1596,7 @@ class PersonalTrendsView(APIView):
                 if len(recent_plays) >= 10:  # Giới hạn ở 10 bài khác nhau
                     break
         
-        recent_serializer = SongPlayHistorySerializer(recent_plays, many=True)
+        recent_serializer = SongPlayHistorySerializer(recent_plays, many=True, context={'request': request})
         
         # Thể loại nghe nhiều nhất trong 30 ngày qua
         last_month = datetime.now() - timedelta(days=30)
@@ -1723,10 +1733,10 @@ class PlayHistoryView(APIView):
                     song_ids.add(record.song.pk)
             
             # Sử dụng SongPlayHistorySerializer với data là unique_songs
-            serializer = SongPlayHistorySerializer(unique_songs, many=True)
+            serializer = SongPlayHistorySerializer(unique_songs, many=True, context={'request': request})
         else:
             # Sử dụng SongPlayHistorySerializer với data là history_records
-            serializer = SongPlayHistorySerializer(history_records, many=True)
+            serializer = SongPlayHistorySerializer(history_records, many=True, context={'request': request})
         
         return Response({
             'total': history.count(),
