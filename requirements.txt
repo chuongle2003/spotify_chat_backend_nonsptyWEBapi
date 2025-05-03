@@ -20,4 +20,3 @@ channels_redis==4.1.0
 gunicorn==21.2.0
 mutagen==1.47.0
 eyed3==0.9.7
-tqdm==4.67.1
