@@ -14,7 +14,8 @@ from .serializers import (
     RatingSerializer, CommentSerializer, SongPlayHistorySerializer,
     SearchHistorySerializer, PlaylistDetailSerializer, SongDetailSerializer,
     AlbumDetailSerializer, GenreDetailSerializer, ArtistSerializer,
-    QueueSerializer, UserStatusSerializer, LyricLineSerializer, MessageSerializer
+    QueueSerializer, UserStatusSerializer, LyricLineSerializer, MessageSerializer,
+    UserBasicSerializer
 )
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -574,9 +575,71 @@ class PlaylistViewSet(viewsets.ModelViewSet):
             )
         return Playlist.objects.filter(is_public=True)
     
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    def get_serializer_class(self):
+        """Sử dụng serializer khác nhau tùy theo action"""
+        if self.action == 'retrieve':
+            return PlaylistDetailSerializer
+        return PlaylistSerializer
     
+    def retrieve(self, request, *args, **kwargs):
+        """
+        Chỉ cho phép xem playlist private nếu là chủ sở hữu
+        """
+        instance = self.get_object()
+        if not instance.is_public and instance.user != request.user:
+            return Response(
+                {'error': 'Bạn không có quyền xem playlist riêng tư này'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        """Gán user hiện tại làm chủ sở hữu khi tạo playlist"""
+        serializer.save(user=self.request.user)
+        self.request._request.session['message'] = 'Đã tạo playlist thành công!'
+    
+    def create(self, request, *args, **kwargs):
+        """Tạo playlist mới với validate dữ liệu"""
+        # Kiểm tra tên playlist
+        if not request.data.get('name'):
+            return Response(
+                {'error': 'Tên playlist không được để trống'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Giới hạn số lượng playlist mỗi user
+        user_playlists_count = Playlist.objects.filter(user=request.user).count()
+        if user_playlists_count >= 50:  # Giới hạn tối đa 50 playlist/user
+            return Response(
+                {'error': 'Bạn đã đạt giới hạn tối đa 50 playlist'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        return super().create(request, *args, **kwargs)
+    
+    def update(self, request, *args, **kwargs):
+        """Chỉ cho phép chủ sở hữu cập nhật thông tin playlist"""
+        playlist = self.get_object()
+        if playlist.user != request.user:
+            return Response(
+                {'error': 'Bạn không có quyền chỉnh sửa playlist này'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        return super().update(request, *args, **kwargs)
+    
+    def destroy(self, request, *args, **kwargs):
+        """Chỉ cho phép chủ sở hữu xóa playlist"""
+        playlist = self.get_object()
+        if playlist.user != request.user:
+            return Response(
+                {'error': 'Bạn không có quyền xóa playlist này'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def add_song(self, request, pk=None):
         """Thêm bài hát vào playlist"""
@@ -584,19 +647,50 @@ class PlaylistViewSet(viewsets.ModelViewSet):
         
         # Kiểm tra quyền chỉnh sửa playlist
         if playlist.user != request.user:
-            return Response({'error': 'You do not have permission to edit this playlist'}, 
-                          status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {'error': 'Bạn không có quyền chỉnh sửa playlist này'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
             
         song_id = request.data.get('song_id')
         if not song_id:
-            return Response({'error': 'Song ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'Cần cung cấp ID bài hát'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Kiểm tra số lượng bài hát trong playlist
+        song_count = playlist.songs.count()
+        if song_count >= 1000:  # Giới hạn tối đa 1000 bài/playlist
+            return Response(
+                {'error': 'Playlist đã đạt giới hạn tối đa 1000 bài hát'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
             
         try:
             song = Song.objects.get(id=song_id)
+            
+            # Kiểm tra bài hát đã có trong playlist chưa
+            if playlist.songs.filter(id=song_id).exists():
+                return Response(
+                    {'error': 'Bài hát đã có trong playlist'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # Kiểm tra file audio hợp lệ
+            if not song.audio_file:
+                return Response(
+                    {'error': 'Bài hát không có file audio'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
             playlist.songs.add(song)
-            return Response({'status': 'song added to playlist'})
+            return Response({'status': 'Đã thêm bài hát vào playlist'})
         except Song.DoesNotExist:
-            return Response({'error': 'Song not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'error': 'Không tìm thấy bài hát'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def remove_song(self, request, pk=None):
@@ -605,19 +699,115 @@ class PlaylistViewSet(viewsets.ModelViewSet):
         
         # Kiểm tra quyền chỉnh sửa playlist
         if playlist.user != request.user:
-            return Response({'error': 'You do not have permission to edit this playlist'}, 
-                          status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {'error': 'Bạn không có quyền chỉnh sửa playlist này'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
             
         song_id = request.data.get('song_id')
         if not song_id:
-            return Response({'error': 'Song ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'Cần cung cấp ID bài hát'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
             
         try:
             song = Song.objects.get(id=song_id)
+            
+            # Kiểm tra bài hát có trong playlist không
+            if not playlist.songs.filter(id=song_id).exists():
+                return Response(
+                    {'error': 'Bài hát không có trong playlist'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
             playlist.songs.remove(song)
-            return Response({'status': 'song removed from playlist'})
+            return Response({'status': 'Đã xóa bài hát khỏi playlist'})
         except Song.DoesNotExist:
-            return Response({'error': 'Song not found'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {'error': 'Không tìm thấy bài hát'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def update_cover_image(self, request, pk=None):
+        """Cập nhật ảnh bìa cho playlist"""
+        playlist = self.get_object()
+        
+        # Kiểm tra quyền chỉnh sửa playlist
+        if playlist.user != request.user:
+            return Response(
+                {'error': 'Bạn không có quyền chỉnh sửa playlist này'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Lấy ảnh từ request
+        image_file = request.FILES.get('cover_image')
+        if not image_file:
+            # Thử lấy ảnh bìa từ bài hát trong playlist
+            song_id = request.data.get('song_id')
+            if song_id:
+                try:
+                    song = Song.objects.get(id=song_id)
+                    if song.cover_image:
+                        playlist.cover_image = song.cover_image
+                        playlist.save()
+                        return Response({'status': 'Đã cập nhật ảnh bìa từ bài hát'})
+                    else:
+                        return Response(
+                            {'error': 'Bài hát không có ảnh bìa'}, 
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                except Song.DoesNotExist:
+                    return Response(
+                        {'error': 'Không tìm thấy bài hát'}, 
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+            else:
+                return Response(
+                    {'error': 'Cần cung cấp file ảnh hoặc ID bài hát'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        
+        # Kiểm tra kích thước ảnh (tối đa 5MB)
+        if image_file.size > 5 * 1024 * 1024:
+            return Response(
+                {'error': 'Kích thước ảnh không được vượt quá 5MB'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Kiểm tra định dạng file
+        valid_types = ['image/jpeg', 'image/png', 'image/jpg']
+        if image_file.content_type not in valid_types:
+            return Response(
+                {'error': 'Định dạng ảnh không hợp lệ. Chỉ chấp nhận JPEG, JPG và PNG'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Cập nhật ảnh bìa
+        playlist.cover_image = image_file
+        playlist.save()
+        
+        return Response({'status': 'Đã cập nhật ảnh bìa thành công'})
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def toggle_privacy(self, request, pk=None):
+        """Chuyển đổi trạng thái công khai/riêng tư của playlist"""
+        playlist = self.get_object()
+        
+        # Kiểm tra quyền chỉnh sửa playlist
+        if playlist.user != request.user:
+            return Response(
+                {'error': 'Bạn không có quyền chỉnh sửa playlist này'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        # Đổi trạng thái
+        playlist.is_public = not playlist.is_public
+        playlist.save()
+        
+        status_text = 'công khai' if playlist.is_public else 'riêng tư'
+        return Response({'status': f'Đã chuyển playlist sang chế độ {status_text}'})
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def follow(self, request, pk=None):
@@ -625,12 +815,22 @@ class PlaylistViewSet(viewsets.ModelViewSet):
         playlist = self.get_object()
         user = request.user
         
+        # Kiểm tra quyền xem playlist
+        if not playlist.is_public and playlist.user != user:
+            return Response(
+                {'error': 'Bạn không có quyền xem playlist riêng tư này'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Kiểm tra đã theo dõi chưa
         if playlist.followers.filter(id=user.id).exists():
-            return Response({'error': 'You are already following this playlist'}, 
-                          status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'Bạn đã theo dõi playlist này rồi'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
             
         playlist.followers.add(user)
-        return Response({'status': 'playlist followed'})
+        return Response({'status': 'Đã theo dõi playlist thành công'})
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def unfollow(self, request, pk=None):
@@ -638,8 +838,36 @@ class PlaylistViewSet(viewsets.ModelViewSet):
         playlist = self.get_object()
         user = request.user
         
+        # Kiểm tra đang theo dõi không
+        if not playlist.followers.filter(id=user.id).exists():
+            return Response(
+                {'error': 'Bạn chưa theo dõi playlist này'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
         playlist.followers.remove(user)
-        return Response({'status': 'playlist unfollowed'})
+        return Response({'status': 'Đã bỏ theo dõi playlist thành công'})
+        
+    @action(detail=True, methods=['get'], permission_classes=[IsAuthenticated])
+    def followers(self, request, pk=None):
+        """Lấy danh sách người theo dõi playlist"""
+        playlist = self.get_object()
+        
+        # Kiểm tra quyền xem danh sách người theo dõi
+        if not playlist.is_public and playlist.user != request.user:
+            return Response(
+                {'error': 'Bạn không có quyền xem thông tin playlist riêng tư này'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        followers = playlist.followers.all()
+        serializer = UserBasicSerializer(followers, many=True)
+        return Response({
+            'playlist_id': playlist.id,
+            'playlist_name': playlist.name,
+            'followers_count': followers.count(),
+            'followers': serializer.data
+        })
 
 class AlbumViewSet(viewsets.ModelViewSet):
     """ViewSet để xử lý các thao tác CRUD với Album"""

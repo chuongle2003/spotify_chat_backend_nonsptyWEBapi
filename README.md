@@ -250,3 +250,106 @@ POST /api/v1/accounts/auth/verify-reset-token/
 - Token chỉ có hiệu lực trong vòng 15 phút
 - Mật khẩu mới phải có ít nhất 8 ký tự
 - Token chỉ có thể sử dụng một lần
+
+# Spotify Chat Backend - Hướng dẫn Playlist API
+
+## Tổng quan về chức năng Playlist
+
+Hệ thống playlist cho phép người dùng:
+
+- Tạo và quản lý danh sách phát cá nhân
+- Đặt chế độ công khai hoặc riêng tư cho playlist
+- Thêm/xóa bài hát vào playlist
+- Cập nhật ảnh bìa cho playlist
+- Theo dõi playlist của người khác
+
+## Đảm bảo quyền riêng tư
+
+Playlist được thiết kế để đảm bảo quyền riêng tư của người dùng:
+
+- Chỉ chủ sở hữu mới có thể chỉnh sửa playlist (thêm/xóa bài hát, cập nhật thông tin)
+- Playlist riêng tư (`is_public=False`) chỉ hiển thị cho chủ sở hữu
+- Người dùng khác chỉ có thể xem/theo dõi playlist công khai
+
+## API Endpoints cho Playlist
+
+### Danh sách và truy xuất
+
+- `GET /api/v1/music/playlists/` - Lấy danh sách playlist công khai
+- `GET /api/v1/music/playlists/{id}/` - Xem chi tiết một playlist
+- `GET /api/v1/music/playlists/me/` - Lấy danh sách playlist của người dùng hiện tại
+
+### Tạo và quản lý
+
+- `POST /api/v1/music/playlists/` - Tạo playlist mới
+- `PUT/PATCH /api/v1/music/playlists/{id}/` - Cập nhật thông tin playlist
+- `DELETE /api/v1/music/playlists/{id}/` - Xóa playlist
+
+### Quản lý bài hát trong playlist
+
+- `POST /api/v1/music/playlists/{id}/add_song/` - Thêm bài hát vào playlist
+- `POST /api/v1/music/playlists/{id}/remove_song/` - Xóa bài hát khỏi playlist
+
+### Quản lý ảnh bìa và quyền riêng tư
+
+- `POST /api/v1/music/playlists/{id}/update_cover_image/` - Cập nhật ảnh bìa playlist
+- `POST /api/v1/music/playlists/{id}/toggle_privacy/` - Chuyển đổi chế độ công khai/riêng tư
+
+### Theo dõi playlist
+
+- `POST /api/v1/music/playlists/{id}/follow/` - Theo dõi playlist
+- `POST /api/v1/music/playlists/{id}/unfollow/` - Bỏ theo dõi playlist
+- `GET /api/v1/music/playlists/{id}/followers/` - Xem danh sách người theo dõi playlist
+
+## Ví dụ sử dụng API
+
+### Tạo playlist mới:
+
+```json
+POST /api/v1/music/playlists/
+{
+  "name": "Nhạc Chill Cuối Tuần",
+  "description": "Những bài hát nhẹ nhàng, thư giãn cho cuối tuần",
+  "is_public": true
+}
+```
+
+### Thêm bài hát vào playlist:
+
+```json
+POST /api/v1/music/playlists/1/add_song/
+{
+  "song_id": 5
+}
+```
+
+### Cập nhật ảnh bìa playlist:
+
+```
+POST /api/v1/music/playlists/1/update_cover_image/
+Content-Type: multipart/form-data
+cover_image: [FILE UPLOAD]
+```
+
+Hoặc sử dụng ảnh từ bài hát:
+
+```json
+POST /api/v1/music/playlists/1/update_cover_image/
+{
+  "song_id": 5
+}
+```
+
+### Chuyển đổi chế độ riêng tư:
+
+```json
+POST /api/v1/music/playlists/1/toggle_privacy/
+```
+
+## Giới hạn và lưu ý
+
+- Mỗi người dùng giới hạn tối đa 50 playlist
+- Mỗi playlist giới hạn tối đa 1000 bài hát
+- Ảnh bìa playlist: tối đa 5MB, chỉ chấp nhận file JPEG, JPG và PNG
+- Không thể thêm trùng bài hát vào playlist
+- Chỉ thêm được bài hát có file audio hợp lệ

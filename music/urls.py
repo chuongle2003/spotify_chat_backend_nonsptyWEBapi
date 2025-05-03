@@ -33,6 +33,11 @@ urlpatterns = [
     path('playlists/create/', views.CreatePlaylistView.as_view(), name='create-playlist'),
     path('features/basic/', views.BasicUserFeatures.as_view(), name='basic-features'),
     
+    # Playlist - Extra endpoints
+    path('playlists/<int:pk>/update-cover/', views.PlaylistViewSet.as_view({'post': 'update_cover_image'}), name='playlist-update-cover'),
+    path('playlists/<int:pk>/toggle-privacy/', views.PlaylistViewSet.as_view({'post': 'toggle_privacy'}), name='playlist-toggle-privacy'),
+    path('playlists/<int:pk>/followers/', views.PlaylistViewSet.as_view({'get': 'followers'}), name='playlist-followers'),
+    
     # Music player functionality
     path('upload/', views.SongUploadView.as_view(), name='song-upload'),
     path('search/', views.SearchView.as_view(), name='search'),
