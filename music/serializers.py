@@ -33,7 +33,8 @@ class SongBasicSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.cover_image.url)
-            return obj.cover_image.url
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}{obj.cover_image.url}"
         return None
 
 class PlaylistBasicSerializer(serializers.ModelSerializer):
@@ -49,7 +50,8 @@ class PlaylistBasicSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.cover_image.url)
-            return obj.cover_image.url
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}{obj.cover_image.url}"
         return None
 
 class UserBasicSerializer(serializers.ModelSerializer):
@@ -92,7 +94,8 @@ class SongSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.audio_file.url)
-            return obj.audio_file.url
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}{obj.audio_file.url}"
         return None
         
     def get_cover_image(self, obj):
@@ -100,7 +103,8 @@ class SongSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.cover_image.url)
-            return obj.cover_image.url
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}{obj.cover_image.url}"
         return None
 
 class SongDetailSerializer(serializers.ModelSerializer):
@@ -123,7 +127,8 @@ class SongDetailSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.audio_file.url)
-            return obj.audio_file.url
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}{obj.audio_file.url}"
         return None
         
     def get_cover_image(self, obj):
@@ -131,7 +136,8 @@ class SongDetailSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.cover_image.url)
-            return obj.cover_image.url
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}{obj.cover_image.url}"
         return None
 
 class PlaylistSerializer(serializers.ModelSerializer):
@@ -152,7 +158,8 @@ class PlaylistSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.cover_image.url)
-            return obj.cover_image.url
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}{obj.cover_image.url}"
         return None
 
 class PlaylistDetailSerializer(serializers.ModelSerializer):
@@ -174,7 +181,8 @@ class PlaylistDetailSerializer(serializers.ModelSerializer):
             request = self.context.get('request')
             if request:
                 return request.build_absolute_uri(obj.cover_image.url)
-            return obj.cover_image.url
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}{obj.cover_image.url}"
         return None
 
 class UserActivitySerializer(serializers.ModelSerializer):
@@ -219,6 +227,7 @@ class RatingSerializer(serializers.ModelSerializer):
 
 class AlbumSerializer(serializers.ModelSerializer):
     songs_count = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
     
     class Meta:
         model = Album
@@ -226,9 +235,19 @@ class AlbumSerializer(serializers.ModelSerializer):
     
     def get_songs_count(self, obj):
         return Song.objects.filter(album=obj.title).count()
+        
+    def get_cover_image(self, obj):
+        if obj.cover_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_image.url)
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}{obj.cover_image.url}"
+        return None
 
 class AlbumDetailSerializer(serializers.ModelSerializer):
     songs = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
     
     class Meta:
         model = Album
@@ -236,7 +255,17 @@ class AlbumDetailSerializer(serializers.ModelSerializer):
     
     def get_songs(self, obj):
         songs = Song.objects.filter(album=obj.title)
-        return SongSerializer(songs, many=True).data
+        context = self.context
+        return SongSerializer(songs, many=True, context=context).data
+    
+    def get_cover_image(self, obj):
+        if obj.cover_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_image.url)
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}{obj.cover_image.url}"
+        return None
 
 class GenreSerializer(serializers.ModelSerializer):
     songs_count = serializers.SerializerMethodField()

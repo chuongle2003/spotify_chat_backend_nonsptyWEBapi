@@ -662,12 +662,22 @@ class AlbumViewSet(viewsets.ModelViewSet):
             return AlbumDetailSerializer
         return AlbumSerializer
     
+    def get_serializer(self, *args, **kwargs):
+        """Đảm bảo request context được truyền vào serializer"""
+        kwargs['context'] = self.get_serializer_context()
+        return super().get_serializer(*args, **kwargs)
+    
+    def get_serializer_context(self):
+        """Thêm request vào context của serializer"""
+        context = super().get_serializer_context()
+        return context
+    
     @action(detail=True, methods=['get'], permission_classes=[AllowAny])
     def songs(self, request, pk=None):
         """Lấy danh sách bài hát trong album"""
         album = self.get_object()
         songs = Song.objects.filter(album=album.title)
-        serializer = SongSerializer(songs, many=True)
+        serializer = SongSerializer(songs, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=True, methods=['get'], permission_classes=[AllowAny])
@@ -676,7 +686,7 @@ class AlbumViewSet(viewsets.ModelViewSet):
         album = self.get_object()
         # Lấy album cùng nghệ sĩ
         related_albums = Album.objects.filter(artist=album.artist).exclude(id=album.id)[:5]
-        serializer = AlbumSerializer(related_albums, many=True)
+        serializer = AlbumSerializer(related_albums, many=True, context={'request': request})
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'], permission_classes=[AllowAny])

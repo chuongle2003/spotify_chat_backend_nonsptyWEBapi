@@ -220,6 +220,13 @@ SIMPLE_JWT = {
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+# URL chính của trang web (dùng cho URL đầy đủ)
+# Sử dụng localhost trong môi trường phát triển và URL thực trong môi trường production
+if DEBUG:
+    SITE_URL = os.environ.get('SITE_URL', 'http://localhost:8000')
+else:
+    SITE_URL = os.environ.get('SITE_URL', 'https://spotifybackend.shop')
+
 # Cấu hình Swagger
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Spotify Chat API',
