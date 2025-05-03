@@ -357,6 +357,11 @@ def generate_song_recommendations(user, limit=10):
     # Tạo truy vấn gợi ý
     recommendations = Song.objects.exclude(id__in=recent_songs.union(favorite_song_ids))
     
+    # Nếu không có bài hát nào sau khi loại trừ (người dùng đã nghe tất cả), lấy bài hát phổ biến
+    if recommendations.count() == 0:
+        print(f"User {user.username} đã nghe tất cả bài hát, không loại trừ")
+        recommendations = Song.objects.all()
+    
     # Ưu tiên bài hát có cùng thể loại với thể loại yêu thích
     if favorite_genres:
         genre_filter = Q()
@@ -397,5 +402,10 @@ def generate_song_recommendations(user, limit=10):
             popular_recommendations = recommendations.order_by('-play_count')[:limit - min(limit // 3, search_recommendations.count())]
             return list(search_recommendations[:limit // 3]) + list(popular_recommendations)
     
-    # Nếu không có đủ thông tin, đề xuất các bài hát phổ biến
-    return list(recommendations.order_by('-play_count')[:limit]) 
+    # Đảm bảo luôn trả về ít nhất một số bài hát
+    popular_songs = recommendations.order_by('-play_count')[:limit]
+    if popular_songs.count() > 0:
+        return list(popular_songs)
+    
+    # Nếu vẫn không có gì, trả về bất kỳ bài hát nào
+    return list(Song.objects.all().order_by('?')[:limit]) 

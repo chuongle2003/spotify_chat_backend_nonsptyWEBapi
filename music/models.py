@@ -237,3 +237,18 @@ class UserStatus(models.Model):
         
     def __str__(self):
         return f"Status for {self.user.username}"
+
+class UserRecommendation(models.Model):
+    """Model lưu trữ các đề xuất bài hát cho người dùng"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='recommendations')
+    song = models.ForeignKey(Song, on_delete=models.CASCADE, related_name='recommended_to')
+    score = models.FloatField(default=0.0)  # Điểm đề xuất để xếp hạng
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'user_recommendations'
+        ordering = ['-score', '-created_at']
+        unique_together = ['user', 'song']  # Mỗi bài hát chỉ được đề xuất một lần cho một người dùng
+        
+    def __str__(self):
+        return f"Recommendation: {self.song.title} for {self.user.username}"

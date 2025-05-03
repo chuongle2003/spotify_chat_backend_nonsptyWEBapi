@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.db.models import Count, F, Q, Sum
 from music.models import (
     Song, Playlist, SongPlayHistory, Genre, 
-    Rating, UserActivity, Album, Artist
+    Rating, UserActivity, Album, Artist, UserRecommendation
 )
 from django.contrib.auth import get_user_model
 from music.utils import generate_song_recommendations
@@ -495,10 +495,29 @@ class Command(BaseCommand):
     def _generate_user_recommendations(self, user, limit):
         """Tạo đề xuất cho một người dùng"""
         try:
+            # Xóa các đề xuất cũ
+            UserRecommendation.objects.filter(user=user).delete()
+            
+            # Tạo đề xuất mới
             recommendations = generate_song_recommendations(user, limit=limit)
             
-            # Ở đây bạn có thể lưu các đề xuất nếu muốn
-            # VD: lưu vào cache, database hoặc file
+            # Lưu đề xuất vào database
+            if recommendations:
+                for i, song in enumerate(recommendations):
+                    # Tính điểm đề xuất (cao nhất ở đầu danh sách)
+                    score = 1.0 - (i / len(recommendations))
+                    UserRecommendation.objects.create(
+                        user=user,
+                        song=song,
+                        score=score
+                    )
+                    
+                # In chi tiết đề xuất
+                self.stdout.write(self.style.SUCCESS(f'Đề xuất cho {user.username}:'))
+                for i, song in enumerate(recommendations, 1):
+                    self.stdout.write(f'  {i}. {song.title} - {song.artist} (genre: {song.genre})')
+            else:
+                self.stdout.write(self.style.WARNING(f'Không có đề xuất nào cho {user.username}'))
             
             return recommendations
         except Exception as e:

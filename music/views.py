@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework import status, permissions, viewsets, generics
 from .models import (
     Playlist, Song, Album, Genre, Rating, Comment, SongPlayHistory, 
-    SearchHistory, Artist, Queue, QueueItem, UserStatus, LyricLine, Message
+    SearchHistory, Artist, Queue, QueueItem, UserStatus, LyricLine, Message, UserRecommendation
 )
 from .serializers import (
     PlaylistSerializer, SongSerializer, AlbumSerializer, GenreSerializer, 
@@ -1741,8 +1741,9 @@ class SongRecommendationView(APIView):
 
     def get(self, request):
         try:
-            from .utils import generate_song_recommendations
+            from .models import UserRecommendation
             from .serializers import SongSerializer
+            from .utils import generate_song_recommendations
             
             # Lấy số lượng từ query params, mặc định là 10
             limit = request.query_params.get('limit', 10)
@@ -1753,8 +1754,24 @@ class SongRecommendationView(APIView):
             except (ValueError, TypeError):
                 limit = 10
                 
-            # Tạo danh sách gợi ý
-            recommended_songs = generate_song_recommendations(request.user, limit=limit)
+            # Lấy đề xuất từ cơ sở dữ liệu
+            user_recommendations = UserRecommendation.objects.filter(user=request.user).order_by('-score')[:limit]
+            recommended_songs = [rec.song for rec in user_recommendations]
+            
+            # Nếu không có đề xuất trong cơ sở dữ liệu, tạo mới
+            if not recommended_songs:
+                # Tự động tạo đề xuất nếu không có sẵn
+                recommended_songs = generate_song_recommendations(request.user, limit=limit)
+                
+                # Lưu các đề xuất mới vào cơ sở dữ liệu
+                if recommended_songs:
+                    for i, song in enumerate(recommended_songs):
+                        score = 1.0 - (i / len(recommended_songs))
+                        UserRecommendation.objects.create(
+                            user=request.user,
+                            song=song,
+                            score=score
+                        )
             
             # Serialize kết quả
             serializer = SongSerializer(recommended_songs, many=True, context={'request': request})
