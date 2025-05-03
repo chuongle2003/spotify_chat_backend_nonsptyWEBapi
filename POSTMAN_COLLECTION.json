@@ -1704,35 +1704,35 @@
                                 },
                                 {
                                     "name": "Create Genre",
-                                    "request": {
-                                        "method": "POST",
-                                        "header": [
-                                            {
-                                                "key": "Authorization",
-                                                "value": "Bearer {{token}}"
-                                            },
-                                            {
-                                                "key": "Content-Type",
-                                                "value": "application/json"
-                                            }
-                                        ],
-                                        "body": {
-                                            "mode": "raw",
+                            "request": {
+                                "method": "POST",
+                                "header": [
+                                    {
+                                        "key": "Authorization",
+                                        "value": "Bearer {{token}}"
+                                    },
+                                    {
+                                        "key": "Content-Type",
+                                        "value": "application/json"
+                                    }
+                                ],
+                                "body": {
+                                    "mode": "raw",
                                             "raw": "{\n  \"name\": \"Alternative Rock\",\n  \"description\": \"Alternative rock is a category of rock music that emerged from the independent music underground...\"\n}"
-                                        },
-                                        "url": {
+                                },
+                                "url": {
                                             "raw": "{{base_url}}/api/v1/music/genres/",
-                                            "host": [
-                                                "{{base_url}}"
-                                            ],
-                                            "path": [
-                                                "api",
-                                                "v1",
-                                                "music",
+                                    "host": [
+                                        "{{base_url}}"
+                                    ],
+                                    "path": [
+                                        "api",
+                                        "v1",
+                                        "music",
                                                 "genres",
-                                                ""
-                                            ]
-                                        },
+                                        ""
+                                    ]
+                                },
                                         "description": "Tạo thể loại nhạc mới (yêu cầu quyền Admin)"
                                     }
                                 },

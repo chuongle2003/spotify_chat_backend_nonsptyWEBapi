@@ -200,7 +200,7 @@ class GenreDetailSerializer(serializers.ModelSerializer):
         return [{'name': artist[0], 'songs_count': artist[1]} for artist in top_artists]
 
 class SongPlayHistorySerializer(serializers.ModelSerializer):
-    song = SongBasicSerializer(read_only=True)
+    song = SongSerializer(read_only=True)
     
     class Meta:
         model = SongPlayHistory

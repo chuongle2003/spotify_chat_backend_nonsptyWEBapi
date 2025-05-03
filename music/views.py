@@ -798,7 +798,7 @@ class UserLibraryView(APIView):
         # Lấy lịch sử nghe gần đây
         recent_history = SongPlayHistory.objects.filter(
             user=user
-        ).order_by('-played_at')[:20]
+        ).order_by('-played_at')[:50]  # Lấy nhiều hơn để có đủ bài khác nhau
         
         recent_songs = []
         song_ids = set()
@@ -808,6 +808,8 @@ class UserLibraryView(APIView):
             if history.song.pk not in song_ids:  # Sử dụng pk thay vì id để tránh lỗi
                 recent_songs.append(history.song)
                 song_ids.add(history.song.pk)
+                if len(recent_songs) >= 20:  # Giới hạn ở 20 bài khác nhau
+                    break
         
         recent_serializer = SongSerializer(recent_songs, many=True)
         
@@ -1571,7 +1573,19 @@ class PersonalTrendsView(APIView):
         user = request.user
         
         # Bài hát nghe gần đây nhất
-        recent_plays = SongPlayHistory.objects.filter(user=user).order_by('-played_at')[:10]
+        recent_history = SongPlayHistory.objects.filter(user=user).order_by('-played_at')[:30]
+        
+        # Chỉ hiển thị bài hát không trùng lặp
+        recent_plays = []
+        song_ids = set()
+        
+        for history in recent_history:
+            if history.song.pk not in song_ids:
+                recent_plays.append(history)
+                song_ids.add(history.song.pk)
+                if len(recent_plays) >= 10:  # Giới hạn ở 10 bài khác nhau
+                    break
+        
         recent_serializer = SongPlayHistorySerializer(recent_plays, many=True)
         
         # Thể loại nghe nhiều nhất trong 30 ngày qua
@@ -1693,7 +1707,26 @@ class PlayHistoryView(APIView):
         start = (page - 1) * page_size
         end = start + page_size
         
-        serializer = SongPlayHistorySerializer(history[start:end], many=True)
+        # Lấy lịch sử phát
+        history_records = history[start:end]
+        
+        # Lấy bài hát không trùng lặp nếu có tham số unique=true
+        unique = request.query_params.get('unique', 'false').lower() == 'true'
+        
+        if unique:
+            unique_songs = []
+            song_ids = set()
+            
+            for record in history_records:
+                if record.song.pk not in song_ids:
+                    unique_songs.append(record)
+                    song_ids.add(record.song.pk)
+            
+            # Sử dụng SongPlayHistorySerializer với data là unique_songs
+            serializer = SongPlayHistorySerializer(unique_songs, many=True)
+        else:
+            # Sử dụng SongPlayHistorySerializer với data là history_records
+            serializer = SongPlayHistorySerializer(history_records, many=True)
         
         return Response({
             'total': history.count(),
