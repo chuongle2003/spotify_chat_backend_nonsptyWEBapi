@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from django.conf import settings
 from django.conf.urls.static import static
+from .views import (SearchHistoryView, SongRecommendationView)
 
 
 router = DefaultRouter()
@@ -70,6 +71,9 @@ urlpatterns = [
     # Lyrics management
     path('songs/<int:song_id>/lyrics/synced/', views.SyncedLyricsView.as_view(), name='synced-lyrics'),
     path('play/', views.play_song, name='play_song'),
+    path('search-history/', SearchHistoryView.as_view(), name='search-history'),
+    path('search-history/delete/', SearchHistoryView.as_view(), name='delete-search-history'),
+    path('recommendations/songs/', SongRecommendationView.as_view(), name='song-recommendations'),
 ]
 if settings.DEBUG:
       urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -298,4 +298,104 @@ def get_waveform_data(file_path: str, num_points: int = 100) -> List[float]:
         return waveform
     except Exception as e:
         print(f"Error generating waveform: {str(e)}")
-        return [] 
+        return []
+
+
+def generate_song_recommendations(user, limit=10):
+    """
+    Tạo danh sách gợi ý bài hát cho người dùng dựa trên lịch sử nghe, bài hát yêu thích,
+    và lịch sử tìm kiếm
+    
+    Args:
+        user: Đối tượng người dùng cần tạo gợi ý
+        limit: Số lượng bài hát tối đa trả về
+        
+    Returns:
+        List[Song]: Danh sách các bài hát được gợi ý
+    """
+    from django.db.models import Count, Q
+    from django.contrib.auth import get_user_model
+    from utils.pylance_helpers import safe_get_related_field
+    from .models import Song, SongPlayHistory, Genre, Artist, SearchHistory, Rating
+    
+    User = get_user_model()
+    
+    # Lấy các thể loại yêu thích của người dùng từ lịch sử nghe và bài hát đã thích
+    favorite_genres = set()
+    
+    # Thêm thể loại từ bài hát yêu thích
+    favorite_songs = safe_get_related_field(user, 'favorite_songs')
+    if favorite_songs:
+        for song in favorite_songs.all():
+            if song.genre:
+                favorite_genres.add(song.genre)
+    
+    # Thêm thể loại từ lịch sử nghe
+    play_history = safe_get_related_field(user, 'play_history')
+    if play_history:
+        for history in play_history.all()[:50]:  # Chỉ xem xét 50 bài hát gần đây nhất
+            if history.song.genre:
+                favorite_genres.add(history.song.genre)
+    
+    # Lấy bài hát đã được đánh giá cao (4-5 sao)
+    high_rated_songs = Rating.objects.filter(user=user, rating__gte=4).values_list('song_id', flat=True)
+    
+    # Lấy danh sách ID bài hát đã nghe gần đây để loại trừ
+    recent_songs = set()
+    if play_history:
+        recent_songs = set(play_history.all()[:20].values_list('song_id', flat=True))
+    
+    # Lấy danh sách ID bài hát đã thích để loại trừ
+    favorite_song_ids = set()
+    if favorite_songs:
+        favorite_song_ids = set(favorite_songs.all().values_list('id', flat=True))
+    
+    # Lấy từ khóa tìm kiếm gần đây
+    recent_searches = SearchHistory.objects.filter(user=user).order_by('-timestamp')[:10]
+    search_keywords = [search.query for search in recent_searches]
+    
+    # Tạo truy vấn gợi ý
+    recommendations = Song.objects.exclude(id__in=recent_songs.union(favorite_song_ids))
+    
+    # Ưu tiên bài hát có cùng thể loại với thể loại yêu thích
+    if favorite_genres:
+        genre_filter = Q()
+        for genre in favorite_genres:
+            genre_filter |= Q(genre__iexact=genre)
+        genre_recommendations = recommendations.filter(genre_filter)
+        
+        # Nếu có đủ bài hát trong thể loại yêu thích
+        if genre_recommendations.count() >= limit:
+            return list(genre_recommendations.order_by('-play_count')[:limit])
+    
+    # Ưu tiên bài hát cùng nghệ sĩ với các bài hát yêu thích
+    favorite_artists = set()
+    if favorite_songs:
+        favorite_artists = set(favorite_songs.all().values_list('artist', flat=True))
+    
+    if favorite_artists:
+        artist_filter = Q()
+        for artist in favorite_artists:
+            artist_filter |= Q(artist__iexact=artist)
+        artist_recommendations = recommendations.filter(artist_filter)
+        
+        if artist_recommendations.count() >= limit // 2:
+            return list(artist_recommendations.order_by('-play_count')[:limit // 2]) + \
+                   list(recommendations.exclude(id__in=artist_recommendations.values_list('id', flat=True))
+                       .order_by('-play_count')[:limit - limit // 2])
+    
+    # Thêm gợi ý dựa trên từ khóa tìm kiếm
+    if search_keywords:
+        search_filter = Q()
+        for keyword in search_keywords:
+            # Tìm trong tiêu đề, nghệ sĩ và album
+            search_filter |= Q(title__icontains=keyword) | Q(artist__icontains=keyword) | Q(album__icontains=keyword)
+        
+        search_recommendations = recommendations.filter(search_filter)
+        if search_recommendations.count() > 0:
+            # Kết hợp với bài hát phổ biến
+            popular_recommendations = recommendations.order_by('-play_count')[:limit - min(limit // 3, search_recommendations.count())]
+            return list(search_recommendations[:limit // 3]) + list(popular_recommendations)
+    
+    # Nếu không có đủ thông tin, đề xuất các bài hát phổ biến
+    return list(recommendations.order_by('-play_count')[:limit]) 

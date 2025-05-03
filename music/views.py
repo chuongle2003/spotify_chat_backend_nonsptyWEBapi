@@ -24,7 +24,7 @@ from datetime import datetime, timedelta
 import django.utils.timezone
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.request import Request
-from .utils import get_audio_metadata, convert_audio_format, extract_synchronized_lyrics, import_synchronized_lyrics, normalize_audio, get_waveform_data
+from .utils import get_audio_metadata, convert_audio_format, extract_synchronized_lyrics, import_synchronized_lyrics, normalize_audio, get_waveform_data, generate_song_recommendations
 import os
 from io import BytesIO
 
@@ -114,6 +114,11 @@ class BasicUserFeatures(APIView):
             'upload': reverse('song-upload'),
             'library': reverse('user-library'),
             'search': reverse('search'),
+            'recommended': reverse('recommended'),
+            'trending': reverse('trending'),
+            'queue': reverse('queue'),
+            'statistics': reverse('user-statistics'),
+            'trends': reverse('personal-trends')
         })
 
 class CreatePlaylistView(APIView):
@@ -383,6 +388,79 @@ class SongViewSet(viewsets.ModelViewSet):
             'page': page, 
             'page_size': page_size,
             'results': serializer.data
+        })
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def rate(self, request, pk=None):
+        """Đánh giá bài hát"""
+        song = self.get_object()
+        user = request.user
+        
+        # Kiểm tra rating hợp lệ
+        rating_value = request.data.get('rating')
+        if not rating_value or not isinstance(rating_value, int) or rating_value < 1 or rating_value > 5:
+            return Response({'error': 'Rating must be an integer between 1 and 5'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        # Kiểm tra xem user đã đánh giá trước đó chưa
+        try:
+            # Nếu tìm thấy, cập nhật đánh giá
+            rating = Rating.objects.get(user=user, song=song)
+            rating.rating = rating_value
+            rating.save()
+            serializer = RatingSerializer(rating)
+            return Response({
+                'status': 'rating updated',
+                'rating': serializer.data
+            })
+        except Rating.DoesNotExist:
+            # Nếu chưa đánh giá, tạo mới
+            rating = Rating.objects.create(
+                user=user,
+                song=song,
+                rating=rating_value
+            )
+            serializer = RatingSerializer(rating)
+            return Response({
+                'status': 'rating created',
+                'rating': serializer.data
+            })
+    
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def comment(self, request, pk=None):
+        """Bình luận về bài hát"""
+        song = self.get_object()
+        user = request.user
+        
+        # Kiểm tra nội dung bình luận
+        content = request.data.get('content')
+        if not content or not content.strip():
+            return Response({'error': 'Comment content is required'}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
+        # Kiểm tra xem có phải là reply cho comment khác không
+        parent_id = request.data.get('parent_id')
+        parent = None
+        
+        if parent_id:
+            try:
+                parent = Comment.objects.get(id=parent_id, song=song)
+            except Comment.DoesNotExist:
+                return Response({'error': 'Parent comment not found'}, 
+                              status=status.HTTP_404_NOT_FOUND)
+        
+        # Tạo comment mới
+        comment = Comment.objects.create(
+            user=user,
+            song=song,
+            content=content,
+            parent=parent
+        )
+        
+        serializer = CommentSerializer(comment)
+        return Response({
+            'status': 'comment created',
+            'comment': serializer.data
         })
 
 class SongUploadView(APIView):
@@ -1654,3 +1732,39 @@ class SearchHistoryView(APIView):
         user = request.user
         SearchHistory.objects.filter(user=user).delete()
         return Response({'status': 'Đã xóa lịch sử tìm kiếm'}, status=status.HTTP_204_NO_CONTENT)
+
+class SongRecommendationView(APIView):
+    """
+    API endpoint trả về danh sách bài hát được gợi ý cho người dùng
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            from .utils import generate_song_recommendations
+            from .serializers import SongSerializer
+            
+            # Lấy số lượng từ query params, mặc định là 10
+            limit = request.query_params.get('limit', 10)
+            try:
+                limit = int(limit)
+                # Giới hạn số lượng tối đa là 50
+                limit = min(limit, 50)
+            except (ValueError, TypeError):
+                limit = 10
+                
+            # Tạo danh sách gợi ý
+            recommended_songs = generate_song_recommendations(request.user, limit=limit)
+            
+            # Serialize kết quả
+            serializer = SongSerializer(recommended_songs, many=True, context={'request': request})
+            
+            return Response({
+                'results': serializer.data,
+                'count': len(recommended_songs)
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
