@@ -94,7 +94,7 @@ function initializeChatWebSocket(roomName, token) {
   // Xử lý tin nhắn nhận được
   socket.onmessage = function (event) {
     try {
-      const data = JSON.parse(event.data);
+  const data = JSON.parse(event.data);
       // Xử lý tin nhắn
       console.log("Tin nhắn nhận được:", data);
       // Thêm tin nhắn vào giao diện người dùng
@@ -201,16 +201,16 @@ function ChatComponent({ token, roomName, currentUser }) {
     }
 
     // Tạo kết nối mới
-    const socket = new WebSocket(
+const socket = new WebSocket(
       `wss://spotifybackend.shop/ws/chat/${roomName}/?token=${token}`
-    );
+);
 
     socket.onopen = () => {
       console.log("WebSocket kết nối thành công");
     };
 
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
+socket.onmessage = (event) => {
+  const data = JSON.parse(event.data);
       setMessages((prevMessages) => [...prevMessages, data]);
     };
 

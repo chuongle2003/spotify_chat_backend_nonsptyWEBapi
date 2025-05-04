@@ -25,16 +25,21 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
         # Kiểm tra xem người dùng có đăng nhập không
         if not self.user.is_authenticated:
+            print("Người dùng chưa đăng nhập, đóng kết nối WebSocket")
             await self.close(code=4001)
             return
         
         # Lấy thông tin người nhận từ room_name (thường là username)
         receiver_user = await self.get_user_by_username(self.room_name)
         if not receiver_user:
+            print(f"Không tìm thấy người dùng với username {self.room_name}")
             await self.close(code=4004)  # Không tìm thấy người dùng
             return
 
         self.receiver = receiver_user
+
+        # In thông tin debug
+        print(f"WebSocket kết nối: {self.user.username} -> {self.receiver.username}")
 
         # Tạo tên nhóm duy nhất cho cuộc trò chuyện giữa hai người
         # Sắp xếp ID để đảm bảo tên nhóm giống nhau bất kể ai kết nối trước
@@ -50,6 +55,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
                 self.room_group_name,
                 self.channel_name
             )
+            print(f"Đã tham gia nhóm: {self.room_group_name}")
             await self.accept()
 
     async def disconnect(self, close_code):

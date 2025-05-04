@@ -6,8 +6,7 @@ class IsAdminUser(permissions.BasePermission):
     """
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and 
-                   (hasattr(request.user, 'is_admin') and request.user.is_admin or 
-                    hasattr(request.user, 'is_staff') and request.user.is_staff))
+                   hasattr(request.user, 'is_admin') and request.user.is_admin)
 
 class IsMessageParticipant(permissions.BasePermission):
     """

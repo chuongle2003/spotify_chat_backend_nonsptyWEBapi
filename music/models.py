@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 
 User = settings.AUTH_USER_MODEL
 
@@ -346,4 +347,47 @@ class UserRecommendation(models.Model):
         unique_together = ['user', 'song']  # Mỗi bài hát chỉ được đề xuất một lần cho một người dùng
         
     def __str__(self):
-        return f"Recommendation: {self.song.title} for {self.user.username}"
+        return f"{self.user.username} - {self.song.title} ({self.score})"
+
+class OfflineDownload(models.Model):
+    """Model lưu trữ thông tin các bài hát đã được tải xuống để nghe offline"""
+    STATUS_CHOICES = (
+        ('PENDING', 'Đang chờ tải xuống'),
+        ('DOWNLOADING', 'Đang tải xuống'),
+        ('COMPLETED', 'Đã tải xuống hoàn tất'),
+        ('FAILED', 'Tải xuống thất bại'),
+        ('EXPIRED', 'Đã hết hạn')
+    )
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='offline_downloads')
+    song = models.ForeignKey(Song, on_delete=models.CASCADE, related_name='offline_downloads')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    progress = models.IntegerField(default=0)  # Tiến độ tải xuống (0-100)
+    local_path = models.CharField(max_length=500, blank=True, null=True)  # Đường dẫn lưu trữ cục bộ
+    download_time = models.DateTimeField(auto_now_add=True)  # Thời điểm tải xuống
+    expiry_time = models.DateTimeField(null=True, blank=True)  # Thời điểm hết hạn (nếu có)
+    is_active = models.BooleanField(default=True)  # Trạng thái còn khả dụng hay không
+    
+    class Meta:
+        db_table = 'offline_downloads'
+        ordering = ['-download_time']
+        unique_together = ['user', 'song']  # Mỗi người dùng chỉ tải một bài hát một lần
+
+    def __str__(self):
+        return f"{self.user.username} - {self.song.title} ({self.get_status_display()})"
+    
+    def is_available(self):
+        """Kiểm tra xem bài hát có khả dụng cho chế độ offline không"""
+        if not self.is_active:
+            return False
+        
+        if self.status != 'COMPLETED':
+            return False
+            
+        if self.expiry_time and self.expiry_time < timezone.now():
+            self.status = 'EXPIRED'
+            self.is_active = False
+            self.save()
+            return False
+            
+        return True

@@ -3,7 +3,8 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from django.conf import settings
 from django.conf.urls.static import static
-from .views import (SearchHistoryView, SongRecommendationView)
+from .views import (SearchHistoryView, SongRecommendationView, OfflineDownloadListView, 
+                   OfflineDownloadView, DeleteOfflineDownloadView, OfflineDownloadStatusView)
 
 
 router = DefaultRouter()
@@ -79,6 +80,12 @@ urlpatterns = [
     path('search-history/', SearchHistoryView.as_view(), name='search-history'),
     path('search-history/delete/', SearchHistoryView.as_view(), name='delete-search-history'),
     path('recommendations/songs/', SongRecommendationView.as_view(), name='song-recommendations'),
+    
+    # Tải xuống offline
+    path('offline/downloads/', OfflineDownloadListView.as_view(), name='offline-downloads'),
+    path('offline/download/', OfflineDownloadView.as_view(), name='offline-download-request'),
+    path('offline/downloads/<int:download_id>/', OfflineDownloadStatusView.as_view(), name='offline-download-status'),
+    path('offline/downloads/<int:download_id>/delete/', DeleteOfflineDownloadView.as_view(), name='offline-download-delete'),
     
     # Admin Collaborative Playlist API 
     path('admin/playlists/collaborative/', views.AdminCollaborativePlaylistListView.as_view(), name='admin-collaborative-playlists'),

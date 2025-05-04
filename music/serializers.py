@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from .models import (
     Song, Playlist, Album, Genre, Rating, Comment, SongPlayHistory, 
-    SearchHistory, UserActivity, LyricLine, Artist, Queue, QueueItem, UserStatus, Message, CollaboratorRole, PlaylistEditHistory
+    SearchHistory, UserActivity, LyricLine, Artist, Queue, QueueItem, UserStatus, Message, CollaboratorRole, PlaylistEditHistory,
+    UserRecommendation, OfflineDownload
 )
 from django.contrib.auth import get_user_model
 from django.conf import settings
@@ -502,3 +503,31 @@ class AdminRestorePlaylistSerializer(serializers.Serializer):
         except PlaylistEditHistory.DoesNotExist:
             raise serializers.ValidationError("History entry does not exist")
         return value 
+
+class UserRecommendationSerializer(serializers.ModelSerializer):
+    song = SongSerializer(read_only=True)
+    
+    class Meta:
+        model = UserRecommendation
+        fields = ['id', 'user', 'song', 'score', 'created_at']
+        read_only_fields = ['user', 'created_at']
+
+class OfflineDownloadSerializer(serializers.ModelSerializer):
+    song_details = SongSerializer(source='song', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    is_available = serializers.BooleanField(read_only=True)
+    
+    class Meta:
+        model = OfflineDownload
+        fields = [
+            'id', 'user', 'song', 'song_details', 'status', 'status_display', 
+            'progress', 'local_path', 'download_time', 'expiry_time', 
+            'is_active', 'is_available'
+        ]
+        read_only_fields = ['user', 'download_time', 'status_display', 'is_available']
+        
+    def create(self, validated_data):
+        # Tự động gán user hiện tại khi tạo mới
+        user = self.context['request'].user
+        validated_data['user'] = user
+        return super().create(validated_data) 

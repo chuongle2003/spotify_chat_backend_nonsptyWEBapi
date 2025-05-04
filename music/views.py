@@ -8,7 +8,7 @@ from rest_framework import status, permissions, viewsets, generics, filters
 from .models import (
     Playlist, Song, Album, Genre, Rating, Comment, SongPlayHistory, 
     SearchHistory, Artist, Queue, QueueItem, UserStatus, LyricLine, Message, UserRecommendation,
-    CollaboratorRole, PlaylistEditHistory
+    CollaboratorRole, PlaylistEditHistory, OfflineDownload
 )
 from .serializers import (
     PlaylistSerializer, SongSerializer, AlbumSerializer, GenreSerializer, 
@@ -17,7 +17,7 @@ from .serializers import (
     AlbumDetailSerializer, GenreDetailSerializer, ArtistSerializer,
     QueueSerializer, UserStatusSerializer, LyricLineSerializer, MessageSerializer,
     UserBasicSerializer, CollaboratorRoleSerializer, CollaboratorRoleCreateSerializer,
-    PlaylistEditHistorySerializer
+    PlaylistEditHistorySerializer, OfflineDownloadSerializer
 )
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -27,9 +27,10 @@ from datetime import datetime, timedelta
 import django.utils.timezone
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.request import Request
-from .utils import get_audio_metadata, convert_audio_format, extract_synchronized_lyrics, import_synchronized_lyrics, normalize_audio, get_waveform_data, generate_song_recommendations
+from .utils import get_audio_metadata, convert_audio_format, extract_synchronized_lyrics, import_synchronized_lyrics, normalize_audio, get_waveform_data, generate_song_recommendations, download_song_for_offline, verify_offline_song, get_offline_song_metadata
 import os
 from io import BytesIO
+from django.conf import settings
 
 User = get_user_model()
 
@@ -121,7 +122,9 @@ class BasicUserFeatures(APIView):
             'trending': reverse('trending'),
             'queue': reverse('queue'),
             'statistics': reverse('user-statistics'),
-            'trends': reverse('personal-trends')
+            'trends': reverse('personal-trends'),
+            'offline': reverse('offline-downloads'),
+            'download': reverse('offline-download-request')
         })
 
 class CreatePlaylistView(APIView):
@@ -1031,43 +1034,54 @@ class UserLibraryView(APIView):
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, format=None):
-        user = request.user
+        """Lấy thư viện nhạc của người dùng, bao gồm playlist, bài hát yêu thích và gần đây đã nghe"""
+        # Lấy playlist của người dùng
+        playlists = Playlist.objects.filter(user=request.user)
+        playlist_serializer = PlaylistSerializer(playlists, many=True)
         
         # Lấy bài hát yêu thích
-        favorite_songs = user.favorite_songs.all()
-        favorite_serializer = SongSerializer(favorite_songs, many=True, context={'request': request})
+        user = request.user
+        favorites = user.favorite_songs.all()
+        favorites_serializer = SongSerializer(favorites, many=True)
         
-        # Lấy playlist
-        playlists = Playlist.objects.filter(user=user)
-        playlist_serializer = PlaylistSerializer(playlists, many=True, context={'request': request})
-        
-        # Lấy playlist đang theo dõi
-        followed_playlists = user.followed_playlists.all()
-        followed_serializer = PlaylistSerializer(followed_playlists, many=True, context={'request': request})
-        
-        # Lấy lịch sử nghe gần đây
-        recent_history = SongPlayHistory.objects.filter(
-            user=user
-        ).order_by('-played_at')[:50]  # Lấy nhiều hơn để có đủ bài khác nhau
+        # Lấy lịch sử nghe nhạc gần đây
+        history = SongPlayHistory.objects.filter(
+            user=request.user
+        ).order_by('-played_at').select_related('song')[:10]
         
         recent_songs = []
-        song_ids = set()
+        seen_song_ids = set()
         
-        # Chỉ lấy mỗi bài hát một lần trong lịch sử
-        for history in recent_history:
-            if history.song.pk not in song_ids:  # Sử dụng pk thay vì id để tránh lỗi
-                recent_songs.append(history.song)
-                song_ids.add(history.song.pk)
-                if len(recent_songs) >= 20:  # Giới hạn ở 20 bài khác nhau
-                    break
+        for item in history:
+            if item.song.id not in seen_song_ids:
+                recent_songs.append(item.song)
+                seen_song_ids.add(item.song.id)
         
-        recent_serializer = SongSerializer(recent_songs, many=True, context={'request': request})
+        recent_serializer = SongSerializer(recent_songs, many=True)
+        
+        # Lấy số lượng bài hát đã tải xuống
+        offline_count = OfflineDownload.objects.filter(
+            user=request.user, 
+            status='COMPLETED',
+            is_active=True
+        ).count()
+        
+        # Lấy không gian đĩa đã sử dụng cho tải xuống offline (đơn vị MB)
+        offline_space = OfflineDownload.objects.filter(
+            user=request.user, 
+            status='COMPLETED',
+            is_active=True
+        ).count() * 5  # Ước tính mỗi bài hát ~5MB
         
         return Response({
-            'favorite_songs': favorite_serializer.data,
             'playlists': playlist_serializer.data,
-            'followed_playlists': followed_serializer.data,
-            'recently_played': recent_serializer.data
+            'favorites': favorites_serializer.data,
+            'recent': recent_serializer.data,
+            'offline': {
+                'count': offline_count,
+                'space_used_mb': offline_space,
+                'url': reverse('offline-downloads')
+            }
         })
 
 class TrendingSongsView(APIView):
@@ -2527,3 +2541,141 @@ class AdminTopGenresReportView(APIView):
                 genre_songs = Song.objects.filter(genre=genre)
                 top_songs = genre_songs.order_by('-play_count')[:5]
                 total_plays = genre_songs.aggregate(Sum('play_count'))['play_count__sum'] or 0
+
+# Thêm API cho việc tải xuống bài hát nghe offline
+class OfflineDownloadListView(APIView):
+    """Danh sách bài hát được tải xuống offline của người dùng hiện tại"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, format=None):
+        """Lấy danh sách bài hát đã được tải xuống offline"""
+        downloads = OfflineDownload.objects.filter(user=request.user)
+        serializer = OfflineDownloadSerializer(downloads, many=True)
+        return Response(serializer.data)
+        
+class OfflineDownloadView(APIView):
+    """API để yêu cầu tải xuống bài hát offline"""
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, format=None):
+        """Yêu cầu tải xuống một bài hát để nghe offline"""
+        song_id = request.data.get('song_id')
+        if not song_id:
+            return Response({'error': 'Cần cung cấp ID bài hát'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Kiểm tra bài hát tồn tại
+        try:
+            song = Song.objects.get(id=song_id)
+        except Song.DoesNotExist:
+            return Response({'error': 'Bài hát không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+            
+        # Kiểm tra xem đã tải xuống trước đó chưa
+        download, created = OfflineDownload.objects.get_or_create(
+            user=request.user,
+            song=song,
+            defaults={
+                'status': 'PENDING',
+                'progress': 0,
+                'is_active': True,
+                'expiry_time': django.utils.timezone.now() + timedelta(days=30)  # Mặc định 30 ngày
+            }
+        )
+        
+        if not created:
+            # Nếu đã tồn tại, cập nhật trạng thái
+            if download.status in ['FAILED', 'EXPIRED']:
+                download.status = 'PENDING'
+                download.progress = 0
+                download.is_active = True
+                download.expiry_time = django.utils.timezone.now() + timedelta(days=30)
+                download.save()
+                
+            # Trả về thông báo khác nhau tùy theo trạng thái
+            if download.status == 'PENDING':
+                message = 'Bài hát đã được thêm vào hàng đợi tải xuống'
+            elif download.status == 'DOWNLOADING':
+                message = f'Bài hát đang được tải xuống ({download.progress}%)'
+            elif download.status == 'COMPLETED':
+                message = 'Bài hát đã được tải xuống trước đó'
+            else:
+                message = f'Trạng thái tải xuống: {download.get_status_display()}'
+        else:
+            message = 'Đã thêm vào hàng đợi tải xuống'
+            
+            # Đây là nơi bạn sẽ gọi task async để tải xuống (ví dụ: Celery)
+            # Trong ví dụ này, chúng ta sẽ giả lập việc tải xuống ngay lập tức
+            self._process_download(download)
+                
+        serializer = OfflineDownloadSerializer(download)
+        return Response({
+            'message': message,
+            'download': serializer.data
+        })
+        
+    def _process_download(self, download):
+        """Xử lý tải xuống (trong thực tế nên được xử lý bởi một task background)"""
+        try:
+            # Cập nhật trạng thái
+            download.status = 'DOWNLOADING'
+            download.progress = 0
+            download.save()
+            
+            # Tạo thư mục lưu trữ cục bộ
+            target_dir = os.path.join(settings.MEDIA_ROOT, f'offline/{download.user.id}')
+            
+            # Tải xuống bài hát sử dụng utility function
+            success, message, file_path = download_song_for_offline(download.song, target_dir)
+            
+            # Cập nhật trạng thái
+            if success and file_path:
+                # Kiểm tra file tải xuống có hợp lệ không
+                if verify_offline_song(file_path):
+                    download.status = 'COMPLETED'
+                    download.progress = 100
+                    download.local_path = file_path
+                else:
+                    download.status = 'FAILED'
+                    download.progress = 0
+                    download.local_path = None
+            else:
+                download.status = 'FAILED'
+                download.progress = 0
+                
+            download.save()
+            
+        except Exception as e:
+            download.status = 'FAILED'
+            download.save()
+            print(f"Lỗi khi tải xuống: {str(e)}")
+            
+class DeleteOfflineDownloadView(APIView):
+    """API để xóa bài hát đã tải xuống offline"""
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, download_id, format=None):
+        """Xóa một bài hát đã tải xuống"""
+        try:
+            download = OfflineDownload.objects.get(id=download_id, user=request.user)
+        except OfflineDownload.DoesNotExist:
+            return Response({'error': 'Không tìm thấy bài hát đã tải xuống'}, status=status.HTTP_404_NOT_FOUND)
+            
+        # Trong thực tế, bạn sẽ xóa file khỏi bộ nhớ cục bộ ở đây
+        # Nhưng trong ví dụ này, chúng ta chỉ cập nhật trạng thái
+        download.is_active = False
+        download.save()
+        
+        return Response({'message': 'Đã xóa bài hát khỏi danh sách tải xuống offline'})
+    
+class OfflineDownloadStatusView(APIView):
+    """API để kiểm tra trạng thái tải xuống"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, download_id, format=None):
+        """Kiểm tra trạng thái tải xuống của một bài hát"""
+        try:
+            download = OfflineDownload.objects.get(id=download_id, user=request.user)
+        except OfflineDownload.DoesNotExist:
+            return Response({'error': 'Không tìm thấy bài hát đã tải xuống'}, status=status.HTTP_404_NOT_FOUND)
+            
+        serializer = OfflineDownloadSerializer(download)
+        return Response(serializer.data)

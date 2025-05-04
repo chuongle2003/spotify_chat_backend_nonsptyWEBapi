@@ -2,7 +2,7 @@ import os
 import tempfile
 import subprocess
 import json
-from typing import Dict, Optional, Union, List, Tuple
+from typing import Dict, Optional, Union, List, Tuple, Any, Mapping, cast
 from django.conf import settings
 from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
@@ -231,24 +231,24 @@ def normalize_audio(file_path: str, target_level: int = -16) -> Optional[str]:
     """
     Chuẩn hóa âm lượng của file âm thanh
     
-    file_path: Đường dẫn đến file âm thanh
-    target_level: Mức âm lượng mục tiêu tính bằng dB LUFS
+    file_path: Đường dẫn đến file âm thanh đầu vào
+    target_level: Mức âm lượng mục tiêu tính bằng dB LUFS (Loudness Units Full Scale)
     
-    Trả về đường dẫn đến file đã chuẩn hóa
+    Trả về đường dẫn đến file đã được chuẩn hóa âm lượng
     """
     if not os.path.exists(file_path):
         return None
-    
+        
     # Tạo tên file đầu ra
     filename = os.path.basename(file_path)
     name, ext = os.path.splitext(filename)
     output_file = os.path.join(tempfile.gettempdir(), f"{name}_normalized{ext}")
     
     try:
-        # Sử dụng ffmpeg với loudnorm filter
+        # Sử dụng ffmpeg-normalize (cần đảm bảo đã cài đặt)
         cmd = [
             'ffmpeg', '-i', file_path,
-            '-af', f'loudnorm=I={target_level}:TP=-1.5:LRA=11',
+            '-af', f'loudnorm=I={target_level}:LRA=11:TP=-1.5', 
             '-y', output_file
         ]
         subprocess.run(cmd, capture_output=True)
@@ -408,4 +408,100 @@ def generate_song_recommendations(user, limit=10):
         return list(popular_songs)
     
     # Nếu vẫn không có gì, trả về bất kỳ bài hát nào
-    return list(Song.objects.all().order_by('?')[:limit]) 
+    return list(Song.objects.all().order_by('?')[:limit])
+
+
+def download_song_for_offline(song, target_dir: Optional[str] = None) -> Tuple[bool, str, Optional[str]]:
+    """
+    Tải bài hát để sử dụng offline
+    
+    song: Đối tượng Song cần tải xuống
+    target_dir: Thư mục đích để lưu trữ file (nếu None, sẽ sử dụng thư mục mặc định)
+    
+    Trả về tuple (success, message, file_path):
+    - success: Boolean chỉ ra thành công hay thất bại
+    - message: Thông báo kết quả
+    - file_path: Đường dẫn đến file đã tải xuống (hoặc None nếu thất bại)
+    """
+    if not song.audio_file:
+        return False, "File âm thanh không tồn tại", None
+        
+    # Tạo tên file
+    song_filename = os.path.basename(song.audio_file.name)
+    
+    # Xác định thư mục đích
+    if not target_dir:
+        # Sử dụng thư mục tạm nếu không chỉ định
+        target_dir = tempfile.gettempdir()
+    
+    # Đảm bảo thư mục tồn tại
+    os.makedirs(target_dir, exist_ok=True)
+    
+    target_path = os.path.join(target_dir, song_filename)
+    
+    try:
+        # Trong môi trường thực tế, đây là nơi bạn sẽ sao chép file từ storage về local
+        # Trong ví dụ này, chúng ta sẽ sử dụng file gốc từ MEDIA_ROOT
+        source_path = song.audio_file.path
+        
+        # Sao chép file
+        import shutil
+        shutil.copy2(source_path, target_path)
+        
+        return True, "Tải xuống thành công", target_path
+    except Exception as e:
+        return False, f"Lỗi khi tải xuống: {str(e)}", None
+        
+def verify_offline_song(file_path: str) -> bool:
+    """
+    Kiểm tra một file nhạc đã tải xuống có hợp lệ không
+    
+    file_path: Đường dẫn đến file âm thanh cần kiểm tra
+    
+    Trả về True nếu file hợp lệ, False nếu không
+    """
+    if not os.path.exists(file_path):
+        return False
+        
+    try:
+        # Kiểm tra file có phải là file âm thanh hợp lệ không
+        cmd = ['ffprobe', '-i', file_path, '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams']
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        # Nếu ffprobe trả về kết quả hợp lệ, file là hợp lệ
+        data = json.loads(result.stdout)
+        
+        # Kiểm tra xem có stream audio không
+        has_audio = False
+        for stream in data.get('streams', []):
+            if stream.get('codec_type') == 'audio':
+                has_audio = True
+                break
+                
+        return has_audio
+    except:
+        return False
+        
+def get_offline_song_metadata(file_path: str) -> Dict[str, Any]:
+    """
+    Lấy metadata của file nhạc offline để hiển thị
+    
+    file_path: Đường dẫn đến file âm thanh
+    
+    Trả về dict chứa metadata của file
+    """
+    # Sử dụng hàm get_audio_metadata đã có
+    metadata = get_audio_metadata(file_path)
+    
+    # Tạo dict mới để tránh lỗi typing
+    metadata_dict: Dict[str, Any] = {}
+    # Sao chép dữ liệu từ metadata gốc
+    for key, value in metadata.items():
+        metadata_dict[key] = value
+        
+    # Bổ sung thông tin về file với kiểu dữ liệu rõ ràng
+    file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+    metadata_dict['file_size'] = file_size
+    metadata_dict['file_size_mb'] = round(file_size / (1024 * 1024), 2)
+    
+    return metadata_dict 

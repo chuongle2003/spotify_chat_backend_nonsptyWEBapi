@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from .models import Song, Playlist, Album, Genre, Comment, Rating  # Các model khác của music app
+from .models import Song, Playlist, Album, Genre, Comment, Rating, OfflineDownload  # Thêm OfflineDownload
 
 # Lỗi xảy ra ở dòng này: @admin.register(User)
 # User đang là một string chứ không phải là một model
@@ -38,3 +38,10 @@ class CommentAdmin(admin.ModelAdmin):
 @admin.register(Rating)
 class RatingAdmin(admin.ModelAdmin):
     list_display = ('user', 'song', 'rating', 'created_at')
+
+@admin.register(OfflineDownload)
+class OfflineDownloadAdmin(admin.ModelAdmin):
+    list_display = ('user', 'song', 'status', 'progress', 'download_time', 'expiry_time', 'is_active')
+    list_filter = ('status', 'is_active', 'download_time')
+    search_fields = ('user__username', 'song__title')
+    date_hierarchy = 'download_time'
