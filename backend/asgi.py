@@ -16,7 +16,6 @@ from django.core.asgi import get_asgi_application
 from channels.routing import ProtocolTypeRouter, URLRouter
 from channels.auth import AuthMiddlewareStack
 from channels.db import database_sync_to_async
-from chat.middleware import get_user_from_token
 from channels.middleware import BaseMiddleware
 from urllib.parse import parse_qs
 
@@ -36,11 +35,17 @@ class JwtAuthMiddleware(BaseMiddleware):
         if not token and 'headers' in scope:
             for name, value in scope.get('headers', []):
                 if name == b'authorization':
-                    token_name, token = value.decode().split()
-                    if token_name.lower() == 'bearer':
-                        break
+                    try:
+                        token_name, token = value.decode().split()
+                        if token_name.lower() == 'bearer':
+                            break
+                    except ValueError:
+                        # Xử lý trường hợp không chia tách được giá trị
+                        pass
         
         if token:
+            # Import ở đây để tránh circular imports
+            from chat.middleware import get_user_from_token
             # Lấy người dùng từ token
             user = await database_sync_to_async(get_user_from_token)(token)
             if user:
@@ -49,18 +54,20 @@ class JwtAuthMiddleware(BaseMiddleware):
         return await super().__call__(scope, receive, send)
 
 # Import các URL patterns sau khi đã khởi tạo Django settings
-from chat.routing import websocket_urlpatterns as chat_websocket_urlpatterns
-from ai_assistant.routing import websocket_urlpatterns as ai_websocket_urlpatterns
+# Tránh import ngay từ đầu để ngăn circular imports
+def get_websocket_urlpatterns():
+    from chat.routing import websocket_urlpatterns as chat_websocket_urlpatterns
+    from ai_assistant.routing import websocket_urlpatterns as ai_websocket_urlpatterns
+    # Kết hợp các patterns từ các ứng dụng khác nhau
+    return chat_websocket_urlpatterns + ai_websocket_urlpatterns
 
-# Combine websocket patterns from different apps
-all_websocket_urlpatterns = chat_websocket_urlpatterns + ai_websocket_urlpatterns
-
+# Tạo ứng dụng ASGI
 application = ProtocolTypeRouter({
     "http": django_asgi_app,
     "websocket": JwtAuthMiddleware(
         AuthMiddlewareStack(
             URLRouter(
-                all_websocket_urlpatterns
+                get_websocket_urlpatterns()
             )
         )
     ),

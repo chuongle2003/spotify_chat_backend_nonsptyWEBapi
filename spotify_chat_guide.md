@@ -1,319 +1,339 @@
-# Hướng dẫn sử dụng Spotify Chat API
+# Hướng dẫn sử dụng WebSocket Chat API cho Client
 
-## Tổng quan
+## Giới thiệu
 
-Spotify Chat là một ứng dụng cho phép người dùng kết nối, trò chuyện và chia sẻ nội dung âm nhạc với nhau trong thời gian thực. Hệ thống hỗ trợ nhiều loại tin nhắn khác nhau và tính năng quản lý tin nhắn, giúp tạo ra một không gian trò chuyện an toàn và thú vị.
+Tài liệu này cung cấp hướng dẫn chi tiết về cách kết nối và sử dụng WebSocket Chat API trong ứng dụng Spotify Chat. Các hướng dẫn dành cho lập trình viên frontend muốn tích hợp tính năng chat thời gian thực vào ứng dụng khách.
 
-## Chức năng chính
+## Thông tin kết nối
 
-### 1. Tin nhắn trực tiếp (Direct Messaging)
+- **Endpoint**: `wss://spotifybackend.shop/ws/chat/{room_name}/`
+- **Giao thức**: WebSocket Secure (WSS)
+- **Yêu cầu xác thực**: JWT Token
 
-- **Gửi và nhận tin nhắn văn bản**: Trao đổi nội dung văn bản với người dùng khác
-- **Đánh dấu đã đọc**: Theo dõi trạng thái đã đọc của tin nhắn
-- **Gửi file đính kèm**: Chia sẻ các loại file như hình ảnh, ghi âm, tài liệu
-- **Chia sẻ âm nhạc**: Gửi bài hát, playlist từ Spotify tới người dùng khác
+## Xác thực
 
-### 2. Kết nối theo dõi (Social Connections)
+Tất cả kết nối WebSocket đều yêu cầu xác thực JWT. Bạn có thể cung cấp token theo một trong hai cách:
 
-- **Theo dõi người dùng**: Kết nối với những người dùng khác thông qua tính năng theo dõi
-- **Tìm kiếm người dùng**: Tìm bạn bè, nghệ sĩ và người dùng khác
-- **Đề xuất kết nối**: Nhận các đề xuất người dùng dựa trên sở thích âm nhạc
+### 1. Sử dụng Query Parameter
 
-### 3. Chat thời gian thực (Real-time Chat)
-
-- **WebSocket**: Kết nối và nhận tin nhắn tức thì không cần refresh trang
-- **Chỉ báo đang nhập**: Hiển thị khi người dùng đang nhập tin nhắn
-- **Thông báo**: Nhận thông báo khi có tin nhắn mới
-
-### 4. Quản lý nội dung (Content Moderation)
-
-- **Báo cáo tin nhắn**: Báo cáo nội dung không phù hợp
-- **Lọc nội dung**: Tự động phát hiện và đánh dấu nội dung có vấn đề
-- **Hạn chế chat**: Quản lý người dùng vi phạm quy định
-
-### 5. Trợ lý AI (AI Assistant)
-
-- **Chat thông minh**: Tương tác với trợ lý AI được hỗ trợ bởi Google Gemini
-- **Multimodal**: Hỗ trợ cả text và hình ảnh trong tương tác
-- **Lịch sử hội thoại**: Lưu trữ và tham chiếu đến các cuộc hội thoại trước đó
-- **Ngữ cảnh tùy chỉnh**: Cá nhân hóa trợ lý cho các trường hợp sử dụng khác nhau
-
-## Cấu trúc dữ liệu
-
-### Tin nhắn (Message)
-
-```json
-{
-  "id": 1,
-  "sender": {
-    "id": 123,
-    "username": "user123",
-    "avatar": "https://example.com/avatar.jpg"
-  },
-  "receiver": {
-    "id": 456,
-    "username": "user456",
-    "avatar": "https://example.com/avatar2.jpg"
-  },
-  "content": "Chào bạn, bạn khỏe không?",
-  "timestamp": "2023-11-20T15:30:45Z",
-  "is_read": false,
-  "message_type": "TEXT",
-  "shared_song": null,
-  "shared_playlist": null,
-  "attachment": null,
-  "image": null,
-  "voice_note": null
-}
+```
+wss://spotifybackend.shop/ws/chat/room1/?token=YOUR_JWT_TOKEN
 ```
 
-### Tin nhắn chia sẻ bài hát (Song Share Message)
+### 2. Sử dụng Authorization Header
 
-```json
-{
-  "id": 2,
-  "sender": {
-    "id": 123,
-    "username": "user123",
-    "avatar": "https://example.com/avatar.jpg"
-  },
-  "receiver": {
-    "id": 456,
-    "username": "user456",
-    "avatar": "https://example.com/avatar2.jpg"
-  },
-  "content": "Bạn nghe thử bài này nhé!",
-  "timestamp": "2023-11-20T15:35:12Z",
-  "is_read": false,
-  "message_type": "SONG",
-  "shared_song": {
-    "id": 789,
-    "title": "Tên bài hát",
-    "artist": "Tên nghệ sĩ",
-    "cover_image": "https://example.com/covers/song.jpg",
-    "duration": 180
-  },
-  "shared_playlist": null,
-  "attachment": null,
-  "image": null,
-  "voice_note": null
-}
+```
+Authorization: Bearer YOUR_JWT_TOKEN
 ```
 
-### Báo cáo tin nhắn (Message Report)
+> **Lưu ý**: Token JWT phải hợp lệ và chưa hết hạn. Nếu token hết hạn, kết nối sẽ bị từ chối với mã lỗi 403.
 
-```json
-{
-  "id": 1,
-  "message": {
-    "id": 123,
-    "content": "Nội dung tin nhắn bị báo cáo",
-    "sender_info": {
-      "id": 5,
-      "username": "reported_user"
-    }
-  },
-  "reporter": {
-    "id": 8,
-    "username": "reporter_user"
-  },
-  "reason": "INAPPROPRIATE",
-  "description": "Tin nhắn này vi phạm quy định",
-  "timestamp": "2023-06-02T11:30:00Z",
-  "status": "PENDING",
-  "handled_by": null,
-  "handled_at": null,
-  "action_taken": ""
-}
-```
+## Thiết lập kết nối WebSocket
 
-### Hạn chế chat (Chat Restriction)
-
-```json
-{
-  "id": 1,
-  "user": {
-    "id": 5,
-    "username": "restricted_user"
-  },
-  "restriction_type": "TEMPORARY",
-  "reason": "Vi phạm quy định chat nhiều lần",
-  "created_at": "2023-06-01T09:00:00Z",
-  "expires_at": "2023-06-08T09:00:00Z",
-  "created_by": {
-    "id": 1,
-    "username": "admin"
-  },
-  "is_active": true,
-  "is_expired": false
-}
-```
-
-### AI Conversation
-
-```json
-{
-  "id": 1,
-  "title": "Hỏi về cách sử dụng playlist",
-  "user": {
-    "id": 123,
-    "username": "user123"
-  },
-  "system_context": "Bạn là trợ lý âm nhạc, giúp người dùng tìm hiểu về các tính năng của ứng dụng Spotify Chat",
-  "created_at": "2023-11-20T14:30:00Z",
-  "updated_at": "2023-11-20T16:45:00Z",
-  "messages": [
-    {
-      "id": 1,
-      "role": "user",
-      "content": "Làm thế nào để tạo playlist?",
-      "created_at": "2023-11-20T14:30:00Z",
-      "has_image": false
-    },
-    {
-      "id": 2,
-      "role": "assistant",
-      "content": "Để tạo playlist, bạn có thể nhấn vào nút 'Tạo playlist mới' ở góc trên bên phải của trang chủ...",
-      "created_at": "2023-11-20T14:30:15Z",
-      "has_image": false
-    }
-  ]
-}
-```
-
-## REST API Endpoints
-
-### API Chat
-
-| Phương thức | Endpoint                             | Mô tả                                     |
-| ----------- | ------------------------------------ | ----------------------------------------- |
-| GET         | `/api/chat/messages/`                | Lấy danh sách tin nhắn của người dùng     |
-| GET         | `/api/chat/messages/{id}/`           | Xem chi tiết tin nhắn                     |
-| POST        | `/api/chat/messages/`                | Gửi tin nhắn mới                          |
-| GET         | `/api/chat/conversations/`           | Lấy danh sách cuộc trò chuyện             |
-| GET         | `/api/chat/conversations/{user_id}/` | Lấy cuộc trò chuyện với người dùng cụ thể |
-| POST        | `/api/chat/report-message/`          | Báo cáo tin nhắn vi phạm                  |
-
-### API Kết nối người dùng
-
-| Phương thức | Endpoint                                   | Mô tả                             |
-| ----------- | ------------------------------------------ | --------------------------------- |
-| GET         | `/api/accounts/social/following/`          | Lấy danh sách người đang theo dõi |
-| GET         | `/api/accounts/social/followers/`          | Lấy danh sách người theo dõi      |
-| GET         | `/api/accounts/social/search/?q={query}`   | Tìm kiếm người dùng               |
-| GET         | `/api/accounts/social/recommendations/`    | Lấy đề xuất người dùng            |
-| POST        | `/api/accounts/social/follow/{user_id}/`   | Theo dõi người dùng               |
-| POST        | `/api/accounts/social/unfollow/{user_id}/` | Hủy theo dõi người dùng           |
-
-### API Admin
-
-| Phương thức | Endpoint                              | Mô tả                            |
-| ----------- | ------------------------------------- | -------------------------------- |
-| GET         | `/api/chat/admin/messages/`           | Lấy danh sách tất cả tin nhắn    |
-| GET         | `/api/chat/admin/messages/{id}/`      | Xem chi tiết tin nhắn            |
-| GET         | `/api/chat/admin/reports/`            | Xem danh sách báo cáo tin nhắn   |
-| GET         | `/api/chat/admin/reports/{id}/`       | Xem chi tiết báo cáo             |
-| PUT         | `/api/chat/admin/reports/{id}/`       | Cập nhật trạng thái báo cáo      |
-| GET         | `/api/chat/admin/reports/statistics/` | Thống kê báo cáo tin nhắn        |
-| GET         | `/api/chat/admin/reports/pending/`    | Xem báo cáo đang chờ xử lý       |
-| GET         | `/api/chat/admin/restrictions/`       | Xem tất cả hạn chế chat          |
-| POST        | `/api/chat/admin/restrictions/`       | Tạo hạn chế chat mới             |
-| PUT         | `/api/chat/admin/restrictions/{id}/`  | Cập nhật hạn chế chat            |
-| GET         | `/api/chat/admin/stats/{user_id}/`    | Xem thống kê chat của người dùng |
-
-### API AI Assistant
-
-| Phương thức | Endpoint                                  | Mô tả                                     |
-| ----------- | ----------------------------------------- | ----------------------------------------- |
-| GET         | `/api/v1/ai/conversations/`               | Lấy danh sách hội thoại AI của người dùng |
-| POST        | `/api/v1/ai/conversations/`               | Tạo hội thoại AI mới                      |
-| GET         | `/api/v1/ai/conversations/{id}/`          | Xem chi tiết hội thoại AI                 |
-| DELETE      | `/api/v1/ai/conversations/{id}/`          | Xóa hội thoại AI                          |
-| GET         | `/api/v1/ai/conversations/{id}/messages/` | Lấy tin nhắn trong hội thoại              |
-| DELETE      | `/api/v1/ai/conversations/{id}/clear/`    | Xóa tất cả tin nhắn trong hội thoại       |
-| POST        | `/api/v1/ai/generate-text/`               | Tạo phản hồi văn bản từ AI                |
-| POST        | `/api/v1/ai/generate-multimodal/`         | Tạo phản hồi từ văn bản + hình ảnh        |
-| GET         | `/api/v1/ai/system-instructions/`         | Lấy danh sách hướng dẫn hệ thống có sẵn   |
-| GET         | `/api/v1/ai/system-prompts/`              | Lấy danh sách prompt hệ thống             |
-
-## WebSocket API
-
-### Kết nối WebSocket cho Chat
-
-Để kết nối WebSocket cho chat thời gian thực:
+### Ví dụ với JavaScript
 
 ```javascript
-// Kết nối đến phòng chat
-const socket = new WebSocket(`wss://spotifybackend.shop/ws/chat/${roomName}/`);
+// Khởi tạo WebSocket với token xác thực
+function initializeChatWebSocket(roomName, token) {
+  // Kết nối đến WebSocket server với token
+  const socket = new WebSocket(
+    `wss://spotifybackend.shop/ws/chat/${roomName}/?token=${token}`
+  );
 
-// Lắng nghe tin nhắn
-socket.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log("Tin nhắn mới:", data.message);
-};
+  // Xử lý sự kiện khi kết nối được thiết lập
+  socket.onopen = function (event) {
+    console.log("Kết nối WebSocket đã được thiết lập");
+    // Có thể gửi thông báo trạng thái online hoặc đang hoạt động
+  };
+
+  // Xử lý sự kiện khi kết nối bị đóng
+  socket.onclose = function (event) {
+    console.log(`Kết nối WebSocket đã đóng với mã: ${event.code}`);
+
+    // Xử lý các mã lỗi khác nhau
+    switch (event.code) {
+      case 4000:
+        console.error("Người dùng bị hạn chế chat");
+        break;
+      case 4001:
+        console.error("Người dùng chưa đăng nhập");
+        break;
+      case 4003:
+        console.error("Token không hợp lệ hoặc hết hạn");
+        // Thử làm mới token
+        break;
+      case 4004:
+        console.error("Không tìm thấy phòng chat");
+        break;
+      case 1000:
+        console.log("Đóng kết nối bình thường");
+        break;
+      default:
+        console.error("Lỗi không xác định, mã: " + event.code);
+    }
+
+    // Thiết lập kết nối lại sau vài giây nếu không phải lỗi nghiêm trọng
+    if (![4000, 4004].includes(event.code)) {
+      setTimeout(() => {
+        console.log("Đang thử kết nối lại...");
+        initializeChatWebSocket(roomName, token);
+      }, 3000);
+    }
+  };
+
+  // Xử lý lỗi
+  socket.onerror = function (error) {
+    console.error("Lỗi WebSocket:", error);
+  };
+
+  // Xử lý tin nhắn nhận được
+  socket.onmessage = function (event) {
+    try {
+      const data = JSON.parse(event.data);
+      // Xử lý tin nhắn
+      console.log("Tin nhắn nhận được:", data);
+      // Thêm tin nhắn vào giao diện người dùng
+      displayMessage(data);
+    } catch (e) {
+      console.error("Lỗi khi xử lý tin nhắn:", e);
+    }
+  };
+
+  return socket;
+}
+
+// Hiển thị tin nhắn trên giao diện người dùng
+function displayMessage(data) {
+  // Thêm logic hiển thị tin nhắn tại đây
+  // Ví dụ:
+  const messageContainer = document.getElementById("messages-container");
+  const messageElement = document.createElement("div");
+  messageElement.className = `message ${
+    data.username === currentUser ? "sent" : "received"
+  }`;
+  messageElement.innerHTML = `
+    <strong>${data.username}</strong>
+    <p>${data.message}</p>
+  `;
+  messageContainer.appendChild(messageElement);
+  messageContainer.scrollTop = messageContainer.scrollHeight;
+}
 
 // Gửi tin nhắn
-socket.send(
-  JSON.stringify({
-    message: "Nội dung tin nhắn",
-  })
-);
-```
-
-### Kết nối WebSocket cho AI Assistant
-
-Để kết nối WebSocket cho AI Assistant:
-
-```javascript
-// Kết nối đến cuộc hội thoại AI
-const socket = new WebSocket(
-  `wss://spotifybackend.shop/ws/ai/chat/${conversationId}/`
-);
-
-// Lắng nghe phản hồi từ AI
-socket.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  if (data.type === "message") {
-    console.log("Phản hồi từ AI:", data.message);
-  } else if (data.type === "typing") {
-    console.log("AI đang nhập...");
+function sendMessage(socket, message, username, roomName) {
+  // Kiểm tra trạng thái kết nối
+  if (socket.readyState !== WebSocket.OPEN) {
+    console.error("Kết nối WebSocket không mở. Trạng thái:", socket.readyState);
+    return false;
   }
-};
 
-// Gửi tin nhắn đến AI
-socket.send(
-  JSON.stringify({
-    type: "message",
-    message: "Làm thế nào để tạo playlist?",
-    system_context:
-      "Bạn là trợ lý âm nhạc, giúp người dùng tìm hiểu về các tính năng của ứng dụng",
-  })
-);
+  // Tạo đối tượng tin nhắn
+  const messageObj = {
+    message: message,
+    username: username,
+    room: roomName,
+  };
+
+  // Gửi tin nhắn
+  try {
+    socket.send(JSON.stringify(messageObj));
+    return true;
+  } catch (e) {
+    console.error("Lỗi khi gửi tin nhắn:", e);
+    return false;
+  }
+}
+
+// Ví dụ sử dụng
+const token = "YOUR_JWT_TOKEN"; // Lấy từ quá trình đăng nhập
+const roomName = "room1"; // ID phòng chat hoặc username người nhận
+const socket = initializeChatWebSocket(roomName, token);
+
+// Khi người dùng gửi tin nhắn
+document.getElementById("send-button").addEventListener("click", function () {
+  const messageInput = document.getElementById("message-input");
+  const message = messageInput.value.trim();
+
+  if (message) {
+    const sent = sendMessage(socket, message, currentUsername, roomName);
+    if (sent) {
+      messageInput.value = ""; // Xóa input sau khi gửi thành công
+    }
+  }
+});
 ```
 
-### Cấu trúc dữ liệu WebSocket
+### Ví dụ với React
 
-#### Gửi tin nhắn Chat
+```jsx
+import React, { useState, useEffect, useRef } from "react";
+
+function ChatComponent({ token, roomName, currentUser }) {
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState("");
+  const socketRef = useRef(null);
+  const reconnectTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    // Thiết lập kết nối WebSocket
+    connectWebSocket();
+
+    // Dọn dẹp khi component unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.close();
+      }
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+    };
+  }, [roomName, token]);
+
+  const connectWebSocket = () => {
+    // Đóng kết nối cũ nếu có
+    if (socketRef.current) {
+      socketRef.current.close();
+    }
+
+    // Tạo kết nối mới
+    const socket = new WebSocket(
+      `wss://spotifybackend.shop/ws/chat/${roomName}/?token=${token}`
+    );
+
+    socket.onopen = () => {
+      console.log("WebSocket kết nối thành công");
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      setMessages((prevMessages) => [...prevMessages, data]);
+    };
+
+    socket.onclose = (event) => {
+      console.log(`WebSocket đóng kết nối với mã: ${event.code}`);
+
+      // Kết nối lại nếu không phải lỗi nghiêm trọng
+      if (![4000, 4004].includes(event.code)) {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          console.log("Đang kết nối lại...");
+          connectWebSocket();
+        }, 3000);
+      }
+    };
+
+    socket.onerror = (error) => {
+      console.error("WebSocket lỗi:", error);
+    };
+
+    socketRef.current = socket;
+  };
+
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (!inputMessage.trim() || !socketRef.current) return;
+
+    const messageObj = {
+      message: inputMessage,
+      username: currentUser,
+      room: roomName,
+    };
+
+    if (socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify(messageObj));
+      setInputMessage("");
+    } else {
+      console.error("WebSocket không sẵn sàng:", socketRef.current.readyState);
+    }
+  };
+
+  return (
+    <div className="chat-container">
+      <div className="messages-list">
+        {messages.map((msg, index) => (
+          <div
+            key={index}
+            className={`message ${
+              msg.username === currentUser ? "sent" : "received"
+            }`}
+          >
+            <div className="message-header">
+              <strong>{msg.username}</strong>
+            </div>
+            <div className="message-body">{msg.message}</div>
+          </div>
+        ))}
+      </div>
+
+      <form onSubmit={handleSendMessage} className="message-form">
+        <input
+          type="text"
+          value={inputMessage}
+          onChange={(e) => setInputMessage(e.target.value)}
+          placeholder="Nhập tin nhắn..."
+          className="message-input"
+        />
+        <button type="submit" className="send-button">
+          Gửi
+        </button>
+      </form>
+    </div>
+  );
+}
+
+export default ChatComponent;
+```
+
+## Định dạng dữ liệu
+
+### Gửi tin nhắn
 
 ```json
 {
-  "message": "Nội dung tin nhắn"
+  "message": "Xin chào, bạn có khỏe không?",
+  "username": "user123",
+  "room": "room1"
 }
 ```
 
-#### Nhận tin nhắn Chat
+| Trường   | Kiểu   | Mô tả                               |
+| -------- | ------ | ----------------------------------- |
+| message  | string | Nội dung tin nhắn                   |
+| username | string | Tên người dùng gửi tin nhắn         |
+| room     | string | Phòng chat hoặc người nhận tin nhắn |
+
+### Nhận tin nhắn
 
 ```json
 {
-  "type": "message",
-  "message": "Nội dung tin nhắn",
-  "sender": 123,
-  "sender_name": "user123",
-  "timestamp": "2023-11-20T15:35:12Z"
+  "message": "Xin chào, bạn có khỏe không?",
+  "username": "user123"
 }
 ```
 
-#### Chỉ báo đang nhập
+| Trường   | Kiểu   | Mô tả                       |
+| -------- | ------ | --------------------------- |
+| message  | string | Nội dung tin nhắn           |
+| username | string | Tên người dùng gửi tin nhắn |
+
+## Chỉ báo đang nhập (Typing Indicator)
+
+### Gửi trạng thái đang nhập
+
+```json
+{
+  "type": "typing",
+  "is_typing": true,
+  "room": "room1"
+}
+```
+
+| Trường    | Kiểu    | Mô tả                                |
+| --------- | ------- | ------------------------------------ |
+| type      | string  | Loại tin nhắn, giá trị là "typing"   |
+| is_typing | boolean | true nếu đang nhập, false nếu dừng   |
+| room      | string  | Phòng chat hoặc người nhận thông báo |
+
+### Nhận trạng thái đang nhập
 
 ```json
 {
@@ -323,113 +343,69 @@ socket.send(
 }
 ```
 
-#### Gửi tin nhắn đến AI Assistant
+## Mã lỗi WebSocket
 
-```json
-{
-  "type": "message",
-  "message": "Làm thế nào để chia sẻ bài hát với bạn bè?",
-  "conversation_id": 1,
-  "system_context": "Bạn là trợ lý âm nhạc chuyên nghiệp"
+| Mã lỗi | Mô tả                      | Xử lý                                     |
+| ------ | -------------------------- | ----------------------------------------- |
+| 4000   | Người dùng bị hạn chế chat | Hiển thị thông báo lỗi, không kết nối lại |
+| 4001   | Người dùng chưa đăng nhập  | Chuyển hướng tới trang đăng nhập          |
+| 4003   | Token không hợp lệ/hết hạn | Làm mới token và kết nối lại              |
+| 4004   | Không tìm thấy phòng chat  | Kiểm tra ID phòng và thử lại              |
+| 1000   | Đóng kết nối bình thường   | Có thể thử kết nối lại                    |
+
+## Xử lý mất kết nối
+
+Để đảm bảo trải nghiệm người dùng tốt nhất, hãy thực hiện các chiến lược sau khi mất kết nối:
+
+1. **Tự động kết nối lại**: Thiết lập cơ chế tự động kết nối lại khi phát hiện mất kết nối
+2. **Backoff tăng dần**: Tăng dần thời gian chờ giữa các lần thử kết nối lại để tránh quá tải server
+3. **Lưu trữ offline**: Lưu tin nhắn đang soạn hoặc chưa gửi được vào bộ nhớ cục bộ
+4. **Hiển thị trạng thái**: Cập nhật UI để hiển thị trạng thái kết nối cho người dùng
+
+### Ví dụ backoff tăng dần
+
+```javascript
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 5;
+
+function reconnectWithBackoff() {
+  if (reconnectAttempts >= maxReconnectAttempts) {
+    console.log("Đã đạt đến số lần thử kết nối tối đa");
+    return;
+  }
+
+  // Tính toán thời gian chờ với backoff theo cấp số nhân
+  const backoffTime = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+  console.log(`Thử kết nối lại sau ${backoffTime}ms`);
+
+  setTimeout(() => {
+    reconnectAttempts++;
+    initializeChatWebSocket(roomName, token);
+  }, backoffTime);
 }
 ```
 
-#### Nhận phản hồi từ AI Assistant
+## Tối ưu hóa hiệu suất
 
-```json
-{
-  "type": "message",
-  "message": "Để chia sẻ bài hát với bạn bè, bạn có thể làm theo các bước sau...",
-  "role": "assistant",
-  "conversation_id": 1
-}
-```
+1. **Gộp tin nhắn**: Khi hiển thị nhiều tin nhắn cùng lúc, gộp chúng thành một lần cập nhật DOM
+2. **Phân trang**: Tải tin nhắn theo trang khi hiển thị lịch sử tin nhắn dài
+3. **Nén dữ liệu**: Giảm kích thước dữ liệu truyền qua WebSocket khi cần
+4. **Xử lý ngắt quãng**: Sử dụng requestAnimationFrame để cập nhật UI mượt mà
 
-## Quy trình sử dụng
+## Danh sách kiểm tra triển khai
 
-### 1. Gửi tin nhắn văn bản
+- [ ] Xác thực JWT token
+- [ ] Xử lý và hiển thị tin nhắn nhận được
+- [ ] Xử lý lỗi và mất kết nối
+- [ ] Tự động kết nối lại
+- [ ] Hiển thị trạng thái kết nối
+- [ ] Xử lý chỉ báo đang nhập
+- [ ] Xử lý cuộn và hiển thị lịch sử tin nhắn
 
-1. Gửi POST request đến `/api/chat/messages/` với dữ liệu:
-   ```json
-   {
-     "receiver": 456,
-     "content": "Nội dung tin nhắn"
-   }
-   ```
-2. Hoặc sử dụng WebSocket để gửi tin nhắn theo thời gian thực.
+## Thực hành tốt nhất
 
-### 2. Chia sẻ bài hát
-
-1. Gửi POST request đến `/api/chat/messages/` với dữ liệu:
-   ```json
-   {
-     "receiver": 456,
-     "content": "Nghe thử bài này nhé!",
-     "shared_song": 789
-   }
-   ```
-
-### 3. Báo cáo tin nhắn vi phạm
-
-1. Gửi POST request đến `/api/chat/report-message/` với dữ liệu:
-   ```json
-   {
-     "message": 123,
-     "reason": "INAPPROPRIATE",
-     "description": "Nội dung tin nhắn vi phạm quy định"
-   }
-   ```
-
-### 4. Xem lịch sử trò chuyện
-
-1. Gửi GET request đến `/api/chat/conversations/{user_id}/` để xem cuộc trò chuyện với một người dùng cụ thể.
-
-### 5. Tương tác với AI Assistant
-
-1. Tạo cuộc hội thoại mới:
-
-   ```json
-   {
-     "title": "Hỏi về cách sử dụng playlist",
-     "system_context": "Bạn là trợ lý âm nhạc, giúp người dùng tìm hiểu về các tính năng của ứng dụng"
-   }
-   ```
-
-2. Gửi tin nhắn và nhận phản hồi:
-
-   ```json
-   {
-     "prompt": "Làm thế nào để tạo playlist?",
-     "conversation_id": 1,
-     "system_context": "Bạn là trợ lý âm nhạc"
-   }
-   ```
-
-3. Gửi hình ảnh và tin nhắn:
-
-   ```
-   POST /api/v1/ai/generate-multimodal/
-   Content-Type: multipart/form-data
-
-   prompt: "Phân tích bài hát trong ảnh này"
-   image: [file_data]
-   conversation_id: 1
-   ```
-
-## Lưu ý phát triển
-
-1. **Xác thực**: Tất cả API đều yêu cầu xác thực JWT.
-2. **Hạn chế**: Người dùng bị hạn chế sẽ không thể gửi tin nhắn.
-3. **Rate limiting**: API có giới hạn số lượng request trong một khoảng thời gian nhất định.
-4. **WebSocket**: Đảm bảo xử lý các trường hợp mất kết nối và tự động kết nối lại.
-5. **AI Rate limits**: API AI Assistant có giới hạn số lượng request dựa trên hạn mức của Gemini API.
-
-## Xử lý lỗi
-
-Các mã lỗi phổ biến:
-
-- `400 Bad Request`: Dữ liệu gửi đi không hợp lệ
-- `401 Unauthorized`: Chưa xác thực hoặc token hết hạn
-- `403 Forbidden`: Không có quyền truy cập
-- `404 Not Found`: Không tìm thấy tài nguyên
-- `429 Too Many Requests`: Vượt quá giới hạn rate limiting
+1. **Bảo mật**: Không lưu JWT token trong localStorage, ưu tiên sử dụng httpOnly cookies
+2. **Validation**: Kiểm tra dữ liệu trước khi gửi và sau khi nhận
+3. **Debounce**: Áp dụng debounce cho các sự kiện như typing indicator
+4. **Lazy loading**: Tải tin nhắn theo nhu cầu khi người dùng cuộn
+5. **Error handling**: Bao gồm xử lý lỗi ở mọi bước
