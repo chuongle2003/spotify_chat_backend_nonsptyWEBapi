@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, UserConnection
 from music.models import Song, Playlist
 from music.serializers import SongBasicSerializer, PlaylistBasicSerializer
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
@@ -241,4 +241,26 @@ class VerifyPasswordResetTokenSerializer(serializers.Serializer):
         # Kiểm tra độ mạnh của mật khẩu
         if len(value) < 8:
             raise serializers.ValidationError("Mật khẩu phải có ít nhất 8 ký tự.")
-        return value 
+        return value
+
+class UserConnectionSerializer(serializers.ModelSerializer):
+    requester_username = serializers.CharField(source='requester.username', read_only=True)
+    receiver_username = serializers.CharField(source='receiver.username', read_only=True)
+    requester_avatar = serializers.SerializerMethodField()
+    receiver_avatar = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = UserConnection
+        fields = ['id', 'requester', 'receiver', 'requester_username', 'receiver_username', 
+                  'requester_avatar', 'receiver_avatar', 'status', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_requester_avatar(self, obj):
+        if hasattr(obj.requester, 'avatar') and obj.requester.avatar:
+            return obj.requester.avatar.url
+        return None
+        
+    def get_receiver_avatar(self, obj):
+        if hasattr(obj.receiver, 'avatar') and obj.receiver.avatar:
+            return obj.receiver.avatar.url
+        return None 

@@ -3,6 +3,8 @@ from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 import random
 import string
+from django.conf import settings
+from django.db.models import Q
 
 class User(AbstractUser):
     email = models.EmailField(unique=True)
@@ -94,3 +96,38 @@ class PasswordResetToken(models.Model):
         
         # Tạo token mới
         return cls.objects.create(user=user)
+
+class UserConnection(models.Model):
+    CONNECTION_STATUS = (
+        ('PENDING', 'Đang chờ xác nhận'),
+        ('ACCEPTED', 'Đã chấp nhận'),
+        ('DECLINED', 'Đã từ chối'),
+        ('BLOCKED', 'Đã chặn'),
+    )
+    
+    requester = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='sent_connections', on_delete=models.CASCADE)
+    receiver = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='received_connections', on_delete=models.CASCADE)
+    status = models.CharField(max_length=10, choices=CONNECTION_STATUS, default='PENDING')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('requester', 'receiver')
+        db_table = 'user_connections'
+    
+    def __str__(self):
+        return f"{self.requester.username} -> {self.receiver.username}: {self.status}"
+    
+    @classmethod
+    def get_connection(cls, user1, user2):
+        """Lấy kết nối giữa hai người dùng nếu có"""
+        return cls.objects.filter(
+            (Q(requester=user1) & Q(receiver=user2)) | 
+            (Q(requester=user2) & Q(receiver=user1))
+        ).first()
+    
+    @classmethod
+    def are_connected(cls, user1, user2):
+        """Kiểm tra xem hai người dùng đã kết nối chưa"""
+        connection = cls.get_connection(user1, user2)
+        return connection is not None and connection.status == 'ACCEPTED'

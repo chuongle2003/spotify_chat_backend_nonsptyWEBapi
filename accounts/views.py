@@ -1,4 +1,4 @@
-from django.shortcuts import render
+from django.shortcuts import render, get_object_or_404
 from rest_framework import viewsets, status, permissions, generics, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -7,8 +7,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.core.exceptions import ValidationError
-from .models import User, PasswordResetToken
-from .serializers import UserSerializer, UserRegistrationSerializer, PublicUserSerializer, AdminUserSerializer, CompleteUserSerializer, CustomTokenObtainPairSerializer, AdminUserCreateSerializer, ForgotPasswordSerializer, VerifyPasswordResetTokenSerializer
+from .models import User, PasswordResetToken, UserConnection
+from .serializers import UserSerializer, UserRegistrationSerializer, PublicUserSerializer, AdminUserSerializer, CompleteUserSerializer, CustomTokenObtainPairSerializer, AdminUserCreateSerializer, ForgotPasswordSerializer, VerifyPasswordResetTokenSerializer, UserConnectionSerializer
 from rest_framework.views import APIView
 from .permissions import IsAdminUser, IsOwnerOrReadOnly, ReadOnly
 import logging
@@ -553,3 +553,240 @@ class UserRecommendationView(generics.ListAPIView):
         recommended_users = [user for user, score in user_scores[:10]]
         
         return recommended_users
+
+# API danh sách tất cả người dùng
+class UserListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        # Loại trừ người dùng hiện tại
+        users = User.objects.exclude(id=request.user.id)
+        serializer = UserSerializer(users, many=True)
+        return Response(serializer.data)
+
+# API đề xuất người dùng
+class UserSuggestionsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        # Lấy người dùng hiện tại
+        current_user = request.user
+        
+        # Lấy danh sách người đã kết nối
+        connections = UserConnection.objects.filter(
+            (Q(requester=current_user) | Q(receiver=current_user)),
+            status='ACCEPTED'
+        )
+        
+        connected_ids = set()
+        for conn in connections:
+            if conn.requester_id == current_user.id:
+                connected_ids.add(conn.receiver_id)
+            else:
+                connected_ids.add(conn.requester_id)
+        
+        # Lấy danh sách người dùng chưa kết nối
+        suggested_users = User.objects.exclude(
+            Q(id__in=connected_ids) | Q(id=current_user.id)
+        ).order_by('?')[:10]  # Lấy 10 người ngẫu nhiên
+        
+        serializer = UserSerializer(suggested_users, many=True)
+        return Response(serializer.data)
+
+# API gửi yêu cầu kết nối
+class ConnectionRequestView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, user_id):
+        # Không thể kết nối với chính mình
+        if user_id == request.user.id:
+            return Response(
+                {"error": "Không thể kết nối với chính mình"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Tìm người nhận
+        receiver = get_object_or_404(User, id=user_id)
+        
+        # Kiểm tra xem đã có kết nối chưa
+        existing_connection = UserConnection.get_connection(request.user, receiver)
+        
+        if existing_connection:
+            if existing_connection.status == 'PENDING':
+                # Nếu tìm thấy yêu cầu đang chờ
+                return Response(
+                    {"error": "Đã có yêu cầu kết nối đang chờ xử lý"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            elif existing_connection.status == 'ACCEPTED':
+                # Nếu đã kết nối
+                return Response(
+                    {"error": "Đã kết nối với người dùng này rồi"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            elif existing_connection.status == 'BLOCKED':
+                # Nếu bị chặn
+                return Response(
+                    {"error": "Không thể gửi yêu cầu kết nối đến người dùng này"}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            else:
+                # Trường hợp khác (DECLINED), tạo kết nối mới
+                existing_connection.delete()
+        
+        # Tạo yêu cầu kết nối mới
+        connection = UserConnection.objects.create(
+            requester=request.user,
+            receiver=receiver,
+            status='PENDING'
+        )
+        
+        serializer = UserConnectionSerializer(connection)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+# API chấp nhận yêu cầu kết nối
+class AcceptConnectionView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, connection_id):
+        # Lấy yêu cầu kết nối
+        connection = get_object_or_404(
+            UserConnection, 
+            id=connection_id, 
+            receiver=request.user,
+            status='PENDING'
+        )
+        
+        # Cập nhật trạng thái
+        connection.status = 'ACCEPTED'
+        connection.save()
+        
+        serializer = UserConnectionSerializer(connection)
+        return Response(serializer.data)
+
+# API từ chối yêu cầu kết nối
+class DeclineConnectionView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, connection_id):
+        # Lấy yêu cầu kết nối
+        connection = get_object_or_404(
+            UserConnection, 
+            id=connection_id, 
+            receiver=request.user,
+            status='PENDING'
+        )
+        
+        # Cập nhật trạng thái
+        connection.status = 'DECLINED'
+        connection.save()
+        
+        serializer = UserConnectionSerializer(connection)
+        return Response(serializer.data)
+
+# API hủy kết nối
+class RemoveConnectionView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, user_id):
+        # Tìm người dùng
+        other_user = get_object_or_404(User, id=user_id)
+        
+        # Tìm kết nối
+        connection = UserConnection.get_connection(request.user, other_user)
+        
+        if not connection or connection.status != 'ACCEPTED':
+            return Response(
+                {"error": "Không có kết nối với người dùng này"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Xóa kết nối
+        connection.delete()
+        
+        return Response({"message": "Đã hủy kết nối thành công"})
+
+# API chặn người dùng
+class BlockUserView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def post(self, request, user_id):
+        # Tìm người dùng
+        user_to_block = get_object_or_404(User, id=user_id)
+        
+        # Tìm kết nối hiện tại nếu có
+        connection = UserConnection.get_connection(request.user, user_to_block)
+        
+        if connection:
+            # Cập nhật thành chặn
+            connection.status = 'BLOCKED'
+            # Đảm bảo người chặn là requester
+            if connection.receiver == request.user:
+                connection.requester, connection.receiver = connection.receiver, connection.requester
+            connection.save()
+        else:
+            # Tạo kết nối chặn mới
+            connection = UserConnection.objects.create(
+                requester=request.user,
+                receiver=user_to_block,
+                status='BLOCKED'
+            )
+        
+        serializer = UserConnectionSerializer(connection)
+        return Response(serializer.data)
+
+# API danh sách yêu cầu kết nối đang chờ
+class PendingConnectionsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        # Lấy các yêu cầu kết nối đang chờ được gửi đến user
+        pending_connections = UserConnection.objects.filter(
+            receiver=request.user,
+            status='PENDING'
+        )
+        
+        serializer = UserConnectionSerializer(pending_connections, many=True)
+        return Response(serializer.data)
+
+# API danh sách người dùng đã kết nối (có thể chat)
+class ConnectedUsersView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request):
+        # Lấy các kết nối đã được chấp nhận
+        connections = UserConnection.objects.filter(
+            (Q(requester=request.user) | Q(receiver=request.user)),
+            status='ACCEPTED'
+        )
+        
+        # Lấy danh sách người dùng từ các kết nối
+        connected_users = []
+        for conn in connections:
+            if conn.requester == request.user:
+                connected_users.append(conn.receiver)
+            else:
+                connected_users.append(conn.requester)
+        
+        serializer = UserSerializer(connected_users, many=True)
+        return Response(serializer.data)
+
+# API kiểm tra quyền chat với người dùng
+class CanChatWithUserView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, username):
+        try:
+            other_user = User.objects.get(username=username)
+            can_chat = UserConnection.are_connected(request.user, other_user)
+            
+            return Response({
+                "can_chat": can_chat,
+                "user_id": other_user.id,
+                "username": other_user.username
+            })
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Không tìm thấy người dùng"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
