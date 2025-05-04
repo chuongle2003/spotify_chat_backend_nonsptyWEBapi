@@ -4,6 +4,30 @@
 
 Hệ thống Chat của Spotify Clone cho phép người dùng kết nối, trò chuyện và chia sẻ âm nhạc với nhau. Đây là nơi người dùng có thể tìm kiếm bạn bè có cùng sở thích âm nhạc, theo dõi và trò chuyện với họ, tạo nên một cộng đồng âm nhạc sôi động.
 
+## Cập nhật quan trọng về hệ thống Chat
+
+> **Cập nhật mới**: Hệ thống đã được cải tiến để cho phép tất cả người dùng chat với nhau mà không cần phải thiết lập kết nối trước! Điều này tạo ra trải nghiệm giao tiếp mở và dễ dàng hơn.
+
+Với cập nhật này:
+
+- Người dùng có thể chat trực tiếp với bất kỳ người dùng nào trong hệ thống
+- API kiểm tra kết nối (`can-chat-with-user`) vẫn hoạt động nhưng luôn trả về `can_chat: true`
+- Tính năng kết nối vẫn được duy trì để giúp người dùng quản lý danh sách liên hệ
+
+### Script tự động tạo kết nối
+
+Để hỗ trợ quản lý liên hệ, một script đã được phát triển để tạo kết nối tự động giữa tất cả người dùng:
+
+```bash
+python generate_auto_connections.py
+```
+
+Script này:
+
+- Tạo kết nối với trạng thái ACCEPTED giữa tất cả các cặp người dùng
+- Giúp hiển thị danh sách liên hệ đầy đủ trong API `/api/connections/users/`
+- Có thể chạy bất cứ khi nào thêm người dùng mới vào hệ thống
+
 ## Tính năng chính
 
 ### 1. Kết nối người dùng
@@ -28,7 +52,30 @@ Hệ thống Chat của Spotify Clone cho phép người dùng kết nối, trò
 
 ## Cách sử dụng
 
-### Kết nối với người dùng khác
+### Trò chuyện với người dùng
+
+1. **Bắt đầu cuộc trò chuyện**:
+
+   - Tìm kiếm người dùng trong hệ thống
+   - Nhấn vào biểu tượng chat trên trang profile người dùng
+   - Hoặc chọn người dùng từ danh sách đề xuất
+   - Gõ tin nhắn và gửi đi
+
+2. **Chia sẻ bài hát**:
+
+   - Trong khi nghe nhạc, nhấn nút "Chia sẻ"
+   - Chọn người dùng để gửi
+   - Thêm tin nhắn kèm theo (tùy chọn)
+   - Gửi đi
+
+3. **Quản lý cuộc trò chuyện**:
+   - Xem danh sách tất cả cuộc trò chuyện
+   - Đánh dấu tin nhắn đã đọc
+   - Xóa cuộc trò chuyện nếu cần
+
+### Kết nối với người dùng khác (Tùy chọn)
+
+Mặc dù không còn bắt buộc để chat, việc tạo kết nối vẫn hữu ích để quản lý danh sách liên hệ:
 
 1. **Tìm người dùng**:
 
@@ -46,58 +93,66 @@ Hệ thống Chat của Spotify Clone cho phép người dùng kết nối, trò
    - Xem danh sách người đang theo dõi bạn
    - Hủy theo dõi nếu muốn
 
-### Trò chuyện với người dùng
-
-1. **Bắt đầu cuộc trò chuyện**:
-
-   - Nhấn vào biểu tượng chat trên trang profile người dùng
-   - Chọn người dùng từ danh sách đang theo dõi
-   - Gõ tin nhắn và gửi đi
-
-2. **Chia sẻ bài hát**:
-
-   - Trong khi nghe nhạc, nhấn nút "Chia sẻ"
-   - Chọn người dùng để gửi
-   - Thêm tin nhắn kèm theo (tùy chọn)
-   - Gửi đi
-
-3. **Quản lý cuộc trò chuyện**:
-   - Xem danh sách tất cả cuộc trò chuyện
-   - Đánh dấu tin nhắn đã đọc
-   - Xóa cuộc trò chuyện nếu cần
-
 ## API Endpoints
 
-Dưới đây là các API endpoints có thể sử dụng để tích hợp chat vào ứng dụng:
+Dưới đây là các API endpoints hiện đang hoạt động để tích hợp chat vào ứng dụng.
+Hệ thống hỗ trợ hai cách truy cập: `/api/` (hiện tại) và `/api/v1/` (tương thích ngược).
+
+> **Lưu ý**: Tất cả các URL dưới đây đều hoạt động với cả hai tiền tố: `/api/` hoặc `/api/v1/`
 
 ### API Kết nối người dùng
 
-| Phương thức | Endpoint                                      | Mô tả                             |
-| ----------- | --------------------------------------------- | --------------------------------- |
-| GET         | `/api/v1/accounts/social/following/`          | Lấy danh sách người đang theo dõi |
-| GET         | `/api/v1/accounts/social/followers/`          | Lấy danh sách người theo dõi      |
-| GET         | `/api/v1/accounts/social/search/?q={query}`   | Tìm kiếm người dùng               |
-| GET         | `/api/v1/accounts/social/recommendations/`    | Lấy đề xuất người dùng            |
-| POST        | `/api/v1/accounts/social/follow/{user_id}/`   | Theo dõi người dùng               |
-| POST        | `/api/v1/accounts/social/unfollow/{user_id}/` | Hủy theo dõi người dùng           |
+| Phương thức | Endpoint                                         | Mô tả                                  |
+| ----------- | ------------------------------------------------ | -------------------------------------- |
+| GET         | `/accounts/users/suggestions/`                   | Lấy đề xuất người dùng                 |
+| POST        | `/accounts/connections/request/{user_id}/`       | Gửi yêu cầu kết nối                    |
+| POST        | `/accounts/connections/accept/{connection_id}/`  | Chấp nhận yêu cầu kết nối              |
+| POST        | `/accounts/connections/decline/{connection_id}/` | Từ chối yêu cầu kết nối                |
+| POST        | `/accounts/connections/remove/{user_id}/`        | Hủy kết nối với người dùng             |
+| POST        | `/accounts/connections/block/{user_id}/`         | Chặn người dùng                        |
+| GET         | `/accounts/connections/pending/`                 | Lấy danh sách yêu cầu kết nối đang chờ |
+| GET         | `/accounts/connections/users/`                   | Lấy danh sách người dùng đã kết nối    |
+| GET         | `/accounts/chat/can-chat/{username}/`            | Kiểm tra quyền chat với người dùng     |
 
 ### API Chat
 
-| Phương thức | Endpoint                                | Mô tả                              |
-| ----------- | --------------------------------------- | ---------------------------------- |
-| GET         | `/api/v1/chat/conversations/`           | Lấy danh sách cuộc trò chuyện      |
-| GET         | `/api/v1/chat/conversations/{user_id}/` | Lấy tin nhắn với người dùng cụ thể |
-| GET         | `/api/v1/chat/messages/`                | Lấy tất cả tin nhắn                |
-| POST        | `/api/v1/chat/messages/`                | Gửi tin nhắn mới                   |
-| GET         | `/api/v1/chat/messages/{id}/`           | Xem chi tiết tin nhắn              |
+| Phương thức | Endpoint                         | Mô tả                              |
+| ----------- | -------------------------------- | ---------------------------------- |
+| GET         | `/chat/conversations/`           | Lấy danh sách cuộc trò chuyện      |
+| GET         | `/chat/conversations/{user_id}/` | Lấy tin nhắn với người dùng cụ thể |
+| GET         | `/chat/messages/`                | Lấy tất cả tin nhắn                |
+| POST        | `/chat/messages/`                | Gửi tin nhắn mới                   |
+| GET         | `/chat/messages/{id}/`           | Xem chi tiết tin nhắn              |
+| POST        | `/chat/report-message/`          | Báo cáo tin nhắn không phù hợp     |
+
+#### Ví dụ:
+
+```
+# URL với tiền tố /api/
+https://spotifybackend.shop/api/chat/conversations/
+
+# URL với tiền tố /api/v1/ (tương thích ngược)
+https://spotifybackend.shop/api/v1/chat/conversations/
+```
+
+### API Admin
+
+| Phương thức | Endpoint                    | Mô tả                                    |
+| ----------- | --------------------------- | ---------------------------------------- |
+| GET         | `/chat/admin/messages/`     | Quản lý tất cả tin nhắn (dành cho admin) |
+| GET         | `/chat/admin/reports/`      | Xem các báo cáo tin nhắn                 |
+| GET         | `/chat/admin/restrictions/` | Quản lý các hạn chế người dùng           |
+| GET         | `/chat/admin/stats/`        | Xem thống kê chat                        |
 
 ### WebSocket
 
 Để kết nối WebSocket cho chat thời gian thực:
 
 ```javascript
-// Kết nối đến phòng chat
-const socket = new WebSocket(`wss://spotifybackend.shop/ws/chat/${roomName}/`);
+// Kết nối đến phòng chat (sử dụng username của người nhận)
+const socket = new WebSocket(
+  `wss://spotifybackend.shop/ws/chat/${receiverUsername}/`
+);
 
 // Lắng nghe tin nhắn
 socket.onmessage = (event) => {

@@ -129,5 +129,5 @@ class UserConnection(models.Model):
     @classmethod
     def are_connected(cls, user1, user2):
         """Kiểm tra xem hai người dùng đã kết nối chưa"""
-        connection = cls.get_connection(user1, user2)
-        return connection is not None and connection.status == 'ACCEPTED'
+        # Luôn trả về True để bất kỳ người dùng nào cũng có thể chat với nhau
+        return True

@@ -28,6 +28,14 @@ Authorization: Bearer YOUR_JWT_TOKEN
 
 > **Lưu ý**: Token JWT phải hợp lệ và chưa hết hạn. Nếu token hết hạn, kết nối sẽ bị từ chối với mã lỗi 403.
 
+## Cập nhật quan trọng về hệ thống kết nối
+
+> **Cập nhật mới**: Bây giờ tất cả người dùng đều có thể chat với nhau mà không cần phải thiết lập kết nối trước. API kết nối vẫn hoạt động như trước đây nhưng không còn bắt buộc để sử dụng chức năng chat.
+
+- API `can-chat-with-user` vẫn hoạt động nhưng luôn trả về `"can_chat": true`
+- Người dùng vẫn có thể theo dõi người dùng khác để dễ dàng tìm kiếm trong danh sách liên hệ
+- Tính năng gợi ý người dùng vẫn hoạt động bình thường
+
 ## Thiết lập kết nối WebSocket
 
 ### Ví dụ với JavaScript
@@ -52,9 +60,6 @@ function initializeChatWebSocket(roomName, token) {
 
     // Xử lý các mã lỗi khác nhau
     switch (event.code) {
-      case 4000:
-        console.error("Người dùng bị hạn chế chat");
-        break;
       case 4001:
         console.error("Người dùng chưa đăng nhập");
         break;
@@ -73,7 +78,7 @@ function initializeChatWebSocket(roomName, token) {
     }
 
     // Thiết lập kết nối lại sau vài giây nếu không phải lỗi nghiêm trọng
-    if (![4000, 4004].includes(event.code)) {
+    if (![4004].includes(event.code)) {
       setTimeout(() => {
         console.log("Đang thử kết nối lại...");
         initializeChatWebSocket(roomName, token);
@@ -89,7 +94,7 @@ function initializeChatWebSocket(roomName, token) {
   // Xử lý tin nhắn nhận được
   socket.onmessage = function (event) {
     try {
-  const data = JSON.parse(event.data);
+      const data = JSON.parse(event.data);
       // Xử lý tin nhắn
       console.log("Tin nhắn nhận được:", data);
       // Thêm tin nhắn vào giao diện người dùng
@@ -196,16 +201,16 @@ function ChatComponent({ token, roomName, currentUser }) {
     }
 
     // Tạo kết nối mới
-const socket = new WebSocket(
+    const socket = new WebSocket(
       `wss://spotifybackend.shop/ws/chat/${roomName}/?token=${token}`
-);
+    );
 
     socket.onopen = () => {
       console.log("WebSocket kết nối thành công");
     };
 
-socket.onmessage = (event) => {
-  const data = JSON.parse(event.data);
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
       setMessages((prevMessages) => [...prevMessages, data]);
     };
 
@@ -213,7 +218,7 @@ socket.onmessage = (event) => {
       console.log(`WebSocket đóng kết nối với mã: ${event.code}`);
 
       // Kết nối lại nếu không phải lỗi nghiêm trọng
-      if (![4000, 4004].includes(event.code)) {
+      if (![4004].includes(event.code)) {
         reconnectTimeoutRef.current = setTimeout(() => {
           console.log("Đang kết nối lại...");
           connectWebSocket();
@@ -345,13 +350,12 @@ export default ChatComponent;
 
 ## Mã lỗi WebSocket
 
-| Mã lỗi | Mô tả                      | Xử lý                                     |
-| ------ | -------------------------- | ----------------------------------------- |
-| 4000   | Người dùng bị hạn chế chat | Hiển thị thông báo lỗi, không kết nối lại |
-| 4001   | Người dùng chưa đăng nhập  | Chuyển hướng tới trang đăng nhập          |
-| 4003   | Token không hợp lệ/hết hạn | Làm mới token và kết nối lại              |
-| 4004   | Không tìm thấy phòng chat  | Kiểm tra ID phòng và thử lại              |
-| 1000   | Đóng kết nối bình thường   | Có thể thử kết nối lại                    |
+| Mã lỗi | Mô tả                      | Xử lý                            |
+| ------ | -------------------------- | -------------------------------- |
+| 4001   | Người dùng chưa đăng nhập  | Chuyển hướng tới trang đăng nhập |
+| 4003   | Token không hợp lệ/hết hạn | Làm mới token và kết nối lại     |
+| 4004   | Không tìm thấy phòng chat  | Kiểm tra ID phòng và thử lại     |
+| 1000   | Đóng kết nối bình thường   | Có thể thử kết nối lại           |
 
 ## Xử lý mất kết nối
 

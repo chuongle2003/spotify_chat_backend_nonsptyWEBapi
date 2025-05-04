@@ -25,25 +25,25 @@ urlpatterns = [
     path('', include(router.urls)),
     
     # Các endpoints xác thực JWT
-    path('api/token/', LoginView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
+    path('token/', LoginView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     
     # API danh sách người dùng
-    path('api/users/', UserListView.as_view(), name='user_list'),
-    path('api/users/suggestions/', UserSuggestionsView.as_view(), name='user_suggestions'),
+    path('users/', UserListView.as_view(), name='user_list'),
+    path('users/suggestions/', UserSuggestionsView.as_view(), name='user_suggestions'),
     
     # API quản lý kết nối
-    path('api/connections/request/<int:user_id>/', ConnectionRequestView.as_view(), name='connection_request'),
-    path('api/connections/accept/<int:connection_id>/', AcceptConnectionView.as_view(), name='accept_connection'),
-    path('api/connections/decline/<int:connection_id>/', DeclineConnectionView.as_view(), name='decline_connection'),
-    path('api/connections/remove/<int:user_id>/', RemoveConnectionView.as_view(), name='remove_connection'),
-    path('api/connections/block/<int:user_id>/', BlockUserView.as_view(), name='block_user'),
+    path('connections/request/<int:user_id>/', ConnectionRequestView.as_view(), name='connection_request'),
+    path('connections/accept/<int:connection_id>/', AcceptConnectionView.as_view(), name='accept_connection'),
+    path('connections/decline/<int:connection_id>/', DeclineConnectionView.as_view(), name='decline_connection'),
+    path('connections/remove/<int:user_id>/', RemoveConnectionView.as_view(), name='remove_connection'),
+    path('connections/block/<int:user_id>/', BlockUserView.as_view(), name='block_user'),
     
     # API danh sách kết nối
-    path('api/connections/pending/', PendingConnectionsView.as_view(), name='pending_connections'),
-    path('api/connections/users/', ConnectedUsersView.as_view(), name='connected_users'),
+    path('connections/pending/', PendingConnectionsView.as_view(), name='pending_connections'),
+    path('connections/users/', ConnectedUsersView.as_view(), name='connected_users'),
     
     # API kiểm tra quyền chat
-    path('api/chat/can-chat/<str:username>/', CanChatWithUserView.as_view(), name='can_chat_with_user'),
+    path('chat/can-chat/<str:username>/', CanChatWithUserView.as_view(), name='can_chat_with_user'),
 ] 

@@ -5,7 +5,9 @@ class IsAdminUser(permissions.BasePermission):
     Cho phép chỉ admin mới có quyền truy cập
     """
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_admin)
+        return bool(request.user and request.user.is_authenticated and 
+                   (hasattr(request.user, 'is_admin') and request.user.is_admin or 
+                    hasattr(request.user, 'is_staff') and request.user.is_staff))
 
 class IsMessageParticipant(permissions.BasePermission):
     """
@@ -13,7 +15,7 @@ class IsMessageParticipant(permissions.BasePermission):
     """
     def has_object_permission(self, request, view, obj):
         # Admin luôn có quyền truy cập
-        if request.user.is_admin:
+        if hasattr(request.user, 'is_admin') and request.user.is_admin:
             return True
         # Người tham gia cuộc trò chuyện có quyền truy cập
         return obj.sender == request.user or obj.receiver == request.user
@@ -24,7 +26,7 @@ class IsReporter(permissions.BasePermission):
     """
     def has_object_permission(self, request, view, obj):
         # Admin luôn có quyền truy cập
-        if request.user.is_admin:
+        if hasattr(request.user, 'is_admin') and request.user.is_admin:
             return True
         # Người báo cáo có quyền truy cập
         return obj.reporter == request.user
@@ -37,7 +39,7 @@ class IsNotRestricted(permissions.BasePermission):
         user = request.user
         
         # Admin luôn có quyền truy cập
-        if user.is_admin:
+        if hasattr(user, 'is_admin') and user.is_admin:
             return True
             
         # Kiểm tra nếu là POST request (gửi tin nhắn mới)
