@@ -25,6 +25,16 @@ urlpatterns = [
         path('users/', views.PublicUserListView.as_view(), name='public-users'),
     ])),
     
+    # API mới cho social/friends
+    path('social/', include([
+        path('following/', views.UserFollowingListView.as_view(), name='user-following'),
+        path('followers/', views.UserFollowersListView.as_view(), name='user-followers'),
+        path('follow/<int:user_id>/', views.FollowUserView.as_view(), name='follow-user'),
+        path('unfollow/<int:user_id>/', views.UnfollowUserView.as_view(), name='unfollow-user'),
+        path('search/', views.UserSearchView.as_view(), name='search-users'),
+        path('recommendations/', views.UserRecommendationView.as_view(), name='recommend-users'),
+    ])),
+    
     # Thêm không gian cho các endpoints tương lai
     # path('profile/', include([
     #     path('settings/', views.ProfileSettingsView.as_view(), name='profile-settings'),

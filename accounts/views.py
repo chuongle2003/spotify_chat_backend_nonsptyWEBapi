@@ -18,6 +18,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.utils import timezone
+from django.db.models import Q
 
 logger = logging.getLogger(__name__)
 
@@ -416,3 +417,139 @@ class VerifyPasswordResetTokenView(generics.CreateAPIView):
                 {'error': 'Email không tồn tại.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+# API lấy danh sách người dùng đang theo dõi
+class UserFollowingListView(generics.ListAPIView):
+    """Lấy danh sách người dùng mà người dùng hiện tại đang theo dõi"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PublicUserSerializer
+
+    def get_queryset(self):
+        return self.request.user.following.all()
+
+# API lấy danh sách người theo dõi người dùng
+class UserFollowersListView(generics.ListAPIView):
+    """Lấy danh sách người dùng đang theo dõi người dùng hiện tại"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PublicUserSerializer
+
+    def get_queryset(self):
+        return self.request.user.followers.all()
+
+# API theo dõi người dùng
+class FollowUserView(generics.CreateAPIView):
+    """API để theo dõi một người dùng khác"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PublicUserSerializer
+    
+    def create(self, request, *args, **kwargs):
+        user_id = kwargs.get('user_id')
+        try:
+            user_to_follow = User.objects.get(id=user_id)
+            
+            if user_to_follow == request.user:
+                return Response(
+                    {"error": "Bạn không thể tự theo dõi chính mình"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            request.user.following.add(user_to_follow)
+            return Response(
+                {"success": f"Đã theo dõi người dùng {user_to_follow.username}"},
+                status=status.HTTP_200_OK
+            )
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Người dùng không tồn tại"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+# API hủy theo dõi người dùng
+class UnfollowUserView(generics.CreateAPIView):
+    """API để hủy theo dõi một người dùng khác"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PublicUserSerializer
+    
+    def create(self, request, *args, **kwargs):
+        user_id = kwargs.get('user_id')
+        try:
+            user_to_unfollow = User.objects.get(id=user_id)
+            
+            if user_to_unfollow not in request.user.following.all():
+                return Response(
+                    {"error": "Bạn chưa theo dõi người dùng này"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            request.user.following.remove(user_to_unfollow)
+            return Response(
+                {"success": f"Đã hủy theo dõi người dùng {user_to_unfollow.username}"},
+                status=status.HTTP_200_OK
+            )
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Người dùng không tồn tại"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+# API tìm kiếm người dùng
+class UserSearchView(generics.ListAPIView):
+    """API để tìm kiếm người dùng theo tên hoặc username"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PublicUserSerializer
+    
+    def get_queryset(self):
+        query = self.request.query_params.get('q', '')
+        if not query:
+            return User.objects.none()
+        
+        return User.objects.filter(
+            Q(username__icontains=query) | 
+            Q(first_name__icontains=query) | 
+            Q(last_name__icontains=query)
+        ).exclude(id=self.request.user.id)
+
+# API gợi ý người dùng dựa trên sở thích âm nhạc
+class UserRecommendationView(generics.ListAPIView):
+    """API gợi ý người dùng dựa trên sở thích âm nhạc tương đồng"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PublicUserSerializer
+    
+    def get_queryset(self):
+        user = self.request.user
+        
+        # Lấy thể loại từ bài hát yêu thích của người dùng
+        favorite_genres = set()
+        for song in user.favorite_songs.all():
+            if song.genre:
+                favorite_genres.add(song.genre)
+        
+        # Tìm người dùng có thể loại tương tự
+        similar_users = User.objects.exclude(id=user.id)
+        
+        # Nếu không có bài hát yêu thích, trả về người dùng ngẫu nhiên
+        if not favorite_genres:
+            return similar_users.order_by('?')[:10]
+        
+        # Tính điểm tương đồng cho mỗi người dùng
+        user_scores = []
+        for other_user in similar_users:
+            score = 0
+            # Tính điểm dựa trên bài hát yêu thích chung
+            common_favorites = user.favorite_songs.filter(
+                id__in=other_user.favorite_songs.values_list('id', flat=True)
+            ).count()
+            score += common_favorites * 3  # Trọng số cao cho bài hát yêu thích chung
+            
+            # Tính điểm dựa trên thể loại yêu thích chung
+            for song in other_user.favorite_songs.all():
+                if song.genre and song.genre in favorite_genres:
+                    score += 1
+            
+            user_scores.append((other_user, score))
+        
+        # Sắp xếp theo điểm giảm dần và lấy 10 người đầu tiên
+        user_scores.sort(key=lambda x: x[1], reverse=True)
+        recommended_users = [user for user, score in user_scores[:10]]
+        
+        return recommended_users
