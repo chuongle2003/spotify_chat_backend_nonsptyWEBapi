@@ -20,8 +20,8 @@ urlpatterns = [
     # API endpoints
     path('api/accounts/', include('accounts.urls.legacy')),
     path('api/chat/', include('chat.urls.legacy')),
-    path('api/music/', include('music.urls.legacy')),
-    path('api/ai/', include('ai_assistant.urls.legacy')),
+    path('api/music/', include('music.urls')),
+    path('api/ai/', include('ai_assistant.urls')),
 ]
 
 # Serve media files in development
