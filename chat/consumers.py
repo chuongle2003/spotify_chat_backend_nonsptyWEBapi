@@ -28,12 +28,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             await self.close(code=4001)
             return
         
-        # Kiểm tra xem người dùng có bị hạn chế không
-        is_restricted = await self.check_user_restriction(self.user)
-        if is_restricted:
-            await self.close(code=4000)
-            return
-
         # Lấy thông tin người nhận từ room_name (thường là username)
         receiver_user = await self.get_user_by_username(self.room_name)
         if not receiver_user:
@@ -41,15 +35,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
             return
 
         self.receiver = receiver_user
-
-        # Kiểm tra quyền admin trước
-        is_admin = getattr(self.user, 'is_admin', False) 
-        
-        # Kiểm tra xem hai người dùng có kết nối với nhau không
-        can_chat = await self.check_user_connection(self.user, self.receiver)
-        if not can_chat and not is_admin:  # Admin luôn có thể chat
-            await self.close(code=4002)  # Chưa kết nối
-            return
 
         # Tạo tên nhóm duy nhất cho cuộc trò chuyện giữa hai người
         # Sắp xếp ID để đảm bảo tên nhóm giống nhau bất kể ai kết nối trước
@@ -88,24 +73,6 @@ class ChatConsumer(AsyncWebsocketConsumer):
         if self.user is None:
             await self.send(text_data=json.dumps({
                 'error': 'Lỗi xác thực người dùng, vui lòng kết nối lại'
-            }))
-            return
-
-        # Kiểm tra lại quyền gửi tin nhắn
-        is_restricted = await self.check_user_restriction(self.user)
-        if is_restricted:
-            await self.send(text_data=json.dumps({
-                'error': 'Tính năng chat của bạn đã bị hạn chế bởi quản trị viên'
-            }))
-            return
-
-        # Kiểm tra lại kết nối
-        can_chat = await self.check_user_connection(self.user, self.receiver)
-        # Kiểm tra quyền admin trước khi sử dụng
-        is_admin = getattr(self.user, 'is_admin', False)
-        if not can_chat and not is_admin:
-            await self.send(text_data=json.dumps({
-                'error': 'Bạn không thể gửi tin nhắn cho người này vì chưa kết nối'
             }))
             return
 
@@ -151,28 +118,7 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def check_user_restriction(self, user):
         """Kiểm tra xem người dùng có bị hạn chế chat không"""
-        
-        # Admin luôn được phép chat
-        if getattr(user, 'is_admin', False):
-            return False
-            
-        # Kiểm tra các hạn chế đang hoạt động
-        active_restrictions = ChatRestriction.objects.filter(
-            user=user,
-            is_active=True
-        )
-        
-        now = timezone.now()
-        for restriction in active_restrictions:
-            # Nếu là hạn chế vĩnh viễn hoặc chưa hết hạn
-            if restriction.restriction_type == 'PERMANENT' or (restriction.expires_at and restriction.expires_at > now):
-                return True
-                
-            # Nếu đã hết hạn, cập nhật trạng thái
-            if restriction.expires_at and restriction.expires_at <= now:
-                restriction.is_active = False
-                restriction.save(update_fields=['is_active'])
-                
+        # Luôn trả về False để bỏ chức năng chặn người dùng chat
         return False
     
     @database_sync_to_async
@@ -186,4 +132,5 @@ class ChatConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def check_user_connection(self, user1, user2):
         """Kiểm tra xem hai người dùng có kết nối với nhau không"""
-        return UserConnection.are_connected(user1, user2)
+        # Luôn trả về True để bỏ chức năng kiểm tra kết nối
+        return True
