@@ -171,14 +171,24 @@ CORS_ALLOWED_ORIGINS = [
 CORS_ALLOW_ALL_ORIGINS = True
 ASGI_APPLICATION = 'backend.asgi.application'
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [{"host": "127.0.0.1", "port": 6379, "password": "Chuongle.2003"}],
+# Sử dụng cấu hình Redis khác nhau dựa trên môi trường
+if DEBUG:
+    # Môi trường phát triển
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
         },
-    },
-}
+    }
+else:
+    # Môi trường sản xuất
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [{"host": "127.0.0.1", "port": 6379, "password": "Chuongle.2003"}],
+            },
+        },
+    }
 
 
 # Cấu hình REST Framework
