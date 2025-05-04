@@ -21,6 +21,7 @@ from django.conf.urls.static import static
 from rest_framework_simplejwt.views import TokenRefreshView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 from accounts.views import LogoutView, CustomTokenObtainPairView  # Import CustomTokenObtainPairView
+from ai_assistant.views import APIDocumentationView
 
 # Định nghĩa API v1 patterns
 api_v1_patterns = [
@@ -57,6 +58,9 @@ urlpatterns = [
     ])),
     
     # API Documentation
+    path('api/documentation/', APIDocumentationView.as_view(permission_classes=[]), name='api-documentation'),
+    
+    # API Documentation (Swagger/OpenAPI)
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', include([
         path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),

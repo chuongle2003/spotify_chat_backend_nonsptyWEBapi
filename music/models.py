@@ -35,7 +35,7 @@ class Playlist(models.Model):
     followers = models.ManyToManyField(User, related_name='followed_playlists', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     # Thêm trường cho Collaborative Playlist
     is_collaborative = models.BooleanField(default=False, help_text="Playlist có thể được chỉnh sửa bởi nhiều người cộng tác")
     collaborators = models.ManyToManyField(User, through='CollaboratorRole', related_name='collaborative_playlists', through_fields=('playlist', 'user'))

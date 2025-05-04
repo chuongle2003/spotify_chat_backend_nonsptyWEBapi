@@ -19,4 +19,5 @@ urlpatterns = [
     path('generate-text/', views.AITextRequestView.as_view(), name='generate-text'),
     path('generate-multimodal/', views.AIMultiModalRequestView.as_view(), name='generate-multimodal'),
     path('system-instructions/', views.SystemInstructionsView.as_view(), name='system-instructions'),
+    path('api-documentation/', views.APIDocumentationView.as_view(), name='api-documentation'),
 ] 

@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tài liệu API - Spotify Chat</title>
+    <style>
+      body {
+        font-family: 'Segoe UI', Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #121212;
+        color: #e0e0e0;
+        line-height: 1.6;
+      }
+      
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      
+      header {
+        text-align: center;
+        margin-bottom: 30px;
+        background-color: #181818;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      }
+      
+      h1 {
+        color: #1db954;
+        margin: 0;
+        padding-bottom: 10px;
+      }
+      
+      h2 {
+        color: #1db954;
+        border-bottom: 1px solid #333;
+        padding-bottom: 5px;
+        margin-top: 30px;
+      }
+      
+      h3 {
+        color: #1db954;
+        margin-top: 20px;
+      }
+      
+      .api-description {
+        font-size: 18px;
+        margin-bottom: 20px;
+      }
+      
+      .module {
+        background-color: #181818;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      }
+      
+      .endpoint {
+        background-color: #202020;
+        border-radius: 8px;
+        padding: 15px;
+        margin: 15px 0;
+        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+      }
+      
+      .method {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 4px;
+        color: white;
+        font-weight: bold;
+        font-size: 14px;
+        margin-right: 10px;
+      }
+      
+      .method-get {
+        background-color: #4CAF50;
+      }
+      
+      .method-post {
+        background-color: #2196F3;
+      }
+      
+      .method-put {
+        background-color: #FF9800;
+      }
+      
+      .method-delete {
+        background-color: #F44336;
+      }
+      
+      .url {
+        font-family: monospace;
+        background-color: #2a2a2a;
+        padding: 5px 10px;
+        border-radius: 4px;
+        font-size: 16px;
+      }
+      
+      .details {
+        margin-top: 15px;
+      }
+      
+      .details-title {
+        font-weight: bold;
+        margin-bottom: 5px;
+        color: #1db954;
+      }
+      
+      pre {
+        background-color: #2a2a2a;
+        padding: 15px;
+        border-radius: 8px;
+        overflow-x: auto;
+        margin: 10px 0;
+      }
+      
+      code {
+        font-family: 'Courier New', Courier, monospace;
+      }
+      
+      .search-container {
+        margin-bottom: 20px;
+      }
+      
+      #search {
+        width: 100%;
+        padding: 10px;
+        border-radius: 4px;
+        border: none;
+        background-color: #333;
+        color: #e0e0e0;
+        font-size: 16px;
+      }
+      
+      .tab-container {
+        overflow: hidden;
+        background-color: #202020;
+        border-radius: 8px 8px 0 0;
+      }
+      
+      .tab {
+        background-color: inherit;
+        border: none;
+        outline: none;
+        cursor: pointer;
+        padding: 14px 16px;
+        transition: 0.3s;
+        font-size: 16px;
+        color: #e0e0e0;
+      }
+      
+      .tab:hover {
+        background-color: #333;
+      }
+      
+      .tab.active {
+        background-color: #1db954;
+        color: white;
+      }
+      
+      .tabcontent {
+        display: none;
+        padding: 20px;
+        background-color: #181818;
+        border-radius: 0 0 8px 8px;
+      }
+      
+      .websocket-section {
+        background-color: #181818;
+        border-radius: 8px;
+        padding: 20px;
+        margin: 30px 0;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      }
+      
+      footer {
+        text-align: center;
+        margin-top: 40px;
+        color: #888;
+        font-size: 14px;
+      }
+      
+      @media (max-width: 768px) {
+        .container {
+          padding: 10px;
+        }
+        
+        .endpoint {
+          padding: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Tài liệu API - Spotify Chat</h1>
+        <p class="api-description">{{ api_data.description }}</p>
+        <p>Base URL: <span class="url">{{ api_data.base_url }}</span></p>
+      </header>
+
+      <div class="search-container">
+        <input type="text" id="search" placeholder="Tìm kiếm API...">
+      </div>
+
+      <!-- Auth Module -->
+      <div class="module" id="auth-module">
+        <h2>Authentication</h2>
+        <p>API xác thực và quản lý phiên đăng nhập.</p>
+
+        {% for endpoint_key, endpoint in api_data.endpoints.auth.items %}
+        <div class="endpoint">
+          <span class="method method-{{ endpoint.method|lower }}">{{ endpoint.method }}</span>
+          <span class="url">{{ endpoint.url }}</span>
+          <div class="details">
+            <p>{{ endpoint.description }}</p>
+
+            <div class="tab-container">
+              <button class="tab active" onclick="openTab(event, '{{ endpoint_key }}-request')">Request</button>
+              <button class="tab" onclick="openTab(event, '{{ endpoint_key }}-response')">Response</button>
+            </div>
+
+            <div id="{{ endpoint_key }}-request" class="tabcontent" style="display: block;">
+              <p class="details-title">Request Body:</p>
+              <pre><code>{{ endpoint.request|tojson(indent=2) }}</code></pre>
+            </div>
+
+            <div id="{{ endpoint_key }}-response" class="tabcontent">
+              <p class="details-title">Response:</p>
+              <pre><code>{{ endpoint.response|tojson(indent=2) }}</code></pre>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Accounts Module -->
+      <div class="module" id="accounts-module">
+        <h2>Accounts</h2>
+        <p>{{ api_data.endpoints.accounts.description }}</p>
+
+        {% for endpoint_key, endpoint in api_data.endpoints.accounts.endpoints.items %}
+        <div class="endpoint">
+          <span class="method method-{{ endpoint.method|lower }}">{{ endpoint.method }}</span>
+          <span class="url">{{ endpoint.url }}</span>
+          <div class="details">
+            <p>{{ endpoint.description }}</p>
+
+            <div class="tab-container">
+              <button class="tab active" onclick="openTab(event, 'accounts-{{ endpoint_key }}-request')">Request</button>
+              <button class="tab" onclick="openTab(event, 'accounts-{{ endpoint_key }}-response')">Response</button>
+            </div>
+
+            <div id="accounts-{{ endpoint_key }}-request" class="tabcontent" style="display: block;">
+              <p class="details-title">Request Body:</p>
+              <pre><code>{{ endpoint.request|tojson(indent=2) }}</code></pre>
+            </div>
+
+            <div id="accounts-{{ endpoint_key }}-response" class="tabcontent">
+              <p class="details-title">Response:</p>
+              <pre><code>{{ endpoint.response|tojson(indent=2) }}</code></pre>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Music Module -->
+      <div class="module" id="music-module">
+        <h2>Music</h2>
+        <p>{{ api_data.endpoints.music.description }}</p>
+
+        {% for endpoint_key, endpoint in api_data.endpoints.music.endpoints.items %}
+        <div class="endpoint">
+          <span class="method method-{{ endpoint.method|lower }}">{{ endpoint.method }}</span>
+          <span class="url">{{ endpoint.url }}</span>
+          <div class="details">
+            <p>{{ endpoint.description }}</p>
+
+            <div class="tab-container">
+              <button class="tab active" onclick="openTab(event, 'music-{{ endpoint_key }}-request')">Request</button>
+              <button class="tab" onclick="openTab(event, 'music-{{ endpoint_key }}-response')">Response</button>
+            </div>
+
+            <div id="music-{{ endpoint_key }}-request" class="tabcontent" style="display: block;">
+              <p class="details-title">Request Body:</p>
+              <pre><code>{{ endpoint.request|tojson(indent=2) }}</code></pre>
+            </div>
+
+            <div id="music-{{ endpoint_key }}-response" class="tabcontent">
+              <p class="details-title">Response:</p>
+              <pre><code>{{ endpoint.response|tojson(indent=2) }}</code></pre>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Chat Module -->
+      <div class="module" id="chat-module">
+        <h2>Chat</h2>
+        <p>{{ api_data.endpoints.chat.description }}</p>
+
+        {% for endpoint_key, endpoint in api_data.endpoints.chat.endpoints.items %}
+        <div class="endpoint">
+          <span class="method method-{{ endpoint.method|lower }}">{{ endpoint.method }}</span>
+          <span class="url">{{ endpoint.url }}</span>
+          <div class="details">
+            <p>{{ endpoint.description }}</p>
+
+            <div class="tab-container">
+              <button class="tab active" onclick="openTab(event, 'chat-{{ endpoint_key }}-request')">Request</button>
+              <button class="tab" onclick="openTab(event, 'chat-{{ endpoint_key }}-response')">Response</button>
+            </div>
+
+            <div id="chat-{{ endpoint_key }}-request" class="tabcontent" style="display: block;">
+              <p class="details-title">Request Body:</p>
+              <pre><code>{{ endpoint.request|tojson(indent=2) }}</code></pre>
+            </div>
+
+            <div id="chat-{{ endpoint_key }}-response" class="tabcontent">
+              <p class="details-title">Response:</p>
+              <pre><code>{{ endpoint.response|tojson(indent=2) }}</code></pre>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- AI Module -->
+      <div class="module" id="ai-module">
+        <h2>AI Assistant</h2>
+        <p>{{ api_data.endpoints.ai.description }}</p>
+
+        <h3>Conversations</h3>
+        
+        <!-- AI Conversations endpoints -->
+        {% for method_key, endpoint in api_data.endpoints.ai.endpoints.conversations.items %}
+        <div class="endpoint">
+          <span class="method method-{{ endpoint.method|lower }}">{{ endpoint.method }}</span>
+          <span class="url">{{ endpoint.url }}</span>
+          <div class="details">
+            <p>{{ endpoint.description }}</p>
+
+            <div class="tab-container">
+              <button class="tab active" onclick="openTab(event, 'ai-conv-{{ method_key }}-request')">Request</button>
+              <button class="tab" onclick="openTab(event, 'ai-conv-{{ method_key }}-response')">Response</button>
+            </div>
+
+            <div id="ai-conv-{{ method_key }}-request" class="tabcontent" style="display: block;">
+              <p class="details-title">Request Body:</p>
+              <pre><code>{{ endpoint.request|tojson(indent=2) }}</code></pre>
+            </div>
+
+            <div id="ai-conv-{{ method_key }}-response" class="tabcontent">
+              <p class="details-title">Response:</p>
+              <pre><code>{{ endpoint.response|tojson(indent=2) }}</code></pre>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+
+        <!-- Other AI endpoints -->
+        {% for endpoint_key, endpoint in api_data.endpoints.ai.endpoints.items %}
+        {% if endpoint_key != 'conversations' %}
+        <div class="endpoint">
+          <span class="method method-{{ endpoint.method|lower }}">{{ endpoint.method }}</span>
+          <span class="url">{{ endpoint.url }}</span>
+          <div class="details">
+            <p>{{ endpoint.description }}</p>
+
+            <div class="tab-container">
+              <button class="tab active" onclick="openTab(event, 'ai-{{ endpoint_key }}-request')">Request</button>
+              <button class="tab" onclick="openTab(event, 'ai-{{ endpoint_key }}-response')">Response</button>
+            </div>
+
+            <div id="ai-{{ endpoint_key }}-request" class="tabcontent" style="display: block;">
+              <p class="details-title">Request Body:</p>
+              <pre><code>{{ endpoint.request|tojson(indent=2) }}</code></pre>
+            </div>
+
+            <div id="ai-{{ endpoint_key }}-response" class="tabcontent">
+              <p class="details-title">Response:</p>
+              <pre><code>{{ endpoint.response|tojson(indent=2) }}</code></pre>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+
+      <!-- WebSocket APIs -->
+      <div class="websocket-section" id="websocket-section">
+        <h2>WebSocket APIs</h2>
+        <p>APIs truyền dữ liệu theo thời gian thực thông qua kết nối WebSocket.</p>
+
+        {% for ws_key, ws in api_data.websocket.items %}
+        <div class="endpoint">
+          <span class="method" style="background-color: #9C27B0;">WS</span>
+          <span class="url">{{ ws.url }}</span>
+          <div class="details">
+            <p>{{ ws.description }}</p>
+
+            <div class="tab-container">
+              <button class="tab active" onclick="openTab(event, 'ws-{{ ws_key }}-send')">Send</button>
+              <button class="tab" onclick="openTab(event, 'ws-{{ ws_key }}-receive')">Receive</button>
+            </div>
+
+            <div id="ws-{{ ws_key }}-send" class="tabcontent" style="display: block;">
+              <p class="details-title">Gửi tin nhắn:</p>
+              <pre><code>{{ ws.messages.send|tojson(indent=2) }}</code></pre>
+            </div>
+
+            <div id="ws-{{ ws_key }}-receive" class="tabcontent">
+              <p class="details-title">Nhận tin nhắn:</p>
+              <pre><code>{{ ws.messages.receive|tojson(indent=2) }}</code></pre>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <footer>
+        <p>Spotify Chat Backend API Documentation v{{ api_data.api_version }}</p>
+      </footer>
+    </div>
+
+    <script>
+      // Tab switching function
+      function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tabcontent");
+        for (i = 0; i < tabcontent.length; i++) {
+          tabcontent[i].style.display = "none";
+        }
+        tablinks = evt.currentTarget.parentElement.getElementsByClassName("tab");
+        for (i = 0; i < tablinks.length; i++) {
+          tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
+      }
+
+      // Search functionality
+      document.getElementById('search').addEventListener('keyup', function() {
+        var searchValue = this.value.toLowerCase();
+        var endpoints = document.getElementsByClassName('endpoint');
+        
+        for (var i = 0; i < endpoints.length; i++) {
+          var endpoint = endpoints[i];
+          var url = endpoint.getElementsByClassName('url')[0].textContent.toLowerCase();
+          var desc = endpoint.getElementsByTagName('p')[0].textContent.toLowerCase();
+          
+          if (url.includes(searchValue) || desc.includes(searchValue)) {
+            endpoint.style.display = "";
+          } else {
+            endpoint.style.display = "none";
+          }
+        }
+      });
+    </script>
+  </body>
+</html> 
