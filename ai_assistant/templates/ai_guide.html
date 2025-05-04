@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hướng dẫn sử dụng AI Assistant - Spotify Chat</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #121212;
+        color: #fff;
+        line-height: 1.6;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background-color: #181818;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+      }
+      h1,
+      h2,
+      h3 {
+        color: #1db954;
+      }
+      h1 {
+        text-align: center;
+        padding-bottom: 10px;
+        border-bottom: 1px solid #333;
+      }
+      code {
+        background-color: #333;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: monospace;
+      }
+      pre {
+        background-color: #333;
+        padding: 15px;
+        border-radius: 8px;
+        overflow-x: auto;
+      }
+      .tip {
+        background-color: rgba(29, 185, 84, 0.1);
+        border-left: 4px solid #1db954;
+        padding: 10px 15px;
+        margin: 15px 0;
+      }
+      .warning {
+        background-color: rgba(255, 173, 51, 0.1);
+        border-left: 4px solid #ffad33;
+        padding: 10px 15px;
+        margin: 15px 0;
+      }
+      a {
+        color: #1db954;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+      .btn {
+        display: inline-block;
+        background-color: #1db954;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 4px;
+        margin-top: 15px;
+        text-decoration: none;
+      }
+      .btn:hover {
+        background-color: #18a046;
+        text-decoration: none;
+      }
+      .feature-list {
+        list-style-type: none;
+        padding: 0;
+      }
+      .feature-list li {
+        margin-bottom: 10px;
+        padding-left: 25px;
+        position: relative;
+      }
+      .feature-list li:before {
+        content: "✓";
+        color: #1db954;
+        position: absolute;
+        left: 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Hướng dẫn sử dụng AI Assistant</h1>
+
+      <h2>Giới thiệu</h2>
+      <p>
+        AI Assistant là công cụ hỗ trợ thông minh tích hợp trong Spotify Chat,
+        sử dụng API Gemini của Google để cung cấp trả lời thông minh cho các câu
+        hỏi của người dùng. Trí tuệ nhân tạo này được huấn luyện đặc biệt để
+        hiểu về hệ thống, âm nhạc, và chức năng của Spotify Chat.
+      </p>
+
+      <div class="tip">
+        <strong>Mẹo:</strong> Để có trải nghiệm tốt nhất, hãy đặt câu hỏi rõ
+        ràng và cung cấp càng nhiều thông tin càng tốt.
+      </div>
+
+      <h2>Tính năng chính</h2>
+      <ul class="feature-list">
+        <li>Trả lời câu hỏi về ứng dụng Spotify Chat và cách sử dụng</li>
+        <li>Cung cấp thông tin về âm nhạc, nghệ sĩ, và thể loại</li>
+        <li>Hỗ trợ quản lý playlist và khám phá nhạc mới</li>
+        <li>Giải thích các tính năng chat và tương tác xã hội</li>
+        <li>Hỗ trợ kỹ thuật về API và chi tiết backend (cho nhà phát triển)</li>
+        <li>Khả năng xử lý hình ảnh (tính năng sắp ra mắt)</li>
+      </ul>
+
+      <h2>Cách sử dụng</h2>
+
+      <h3>1. Truy cập AI Assistant</h3>
+      <p>
+        Bạn có thể truy cập AI Assistant từ menu chính của ứng dụng hoặc trực
+        tiếp tại
+        <a href="/api/v1/ai/chat/">đường dẫn AI Chat</a>.
+      </p>
+
+      <h3>2. Chọn ngữ cảnh phù hợp</h3>
+      <p>
+        Hệ thống cung cấp một số ngữ cảnh mặc định để tối ưu hóa trải nghiệm của
+        bạn:
+      </p>
+      <ul>
+        <li><strong>General:</strong> Hỗ trợ chung về Spotify Chat</li>
+        <li>
+          <strong>Music:</strong> Tập trung vào thông tin âm nhạc, nghệ sĩ, thể
+          loại
+        </li>
+        <li><strong>Chat:</strong> Giúp hiểu các tính năng chat</li>
+        <li><strong>Playlists:</strong> Hỗ trợ quản lý và khám phá playlist</li>
+        <li>
+          <strong>Technical:</strong> Thông tin kỹ thuật cho nhà phát triển
+        </li>
+        <li>
+          <strong>Custom:</strong> Tự tạo ngữ cảnh riêng (cho người dùng nâng
+          cao)
+        </li>
+      </ul>
+
+      <h3>3. Đặt câu hỏi</h3>
+      <p>
+        Nhập câu hỏi của bạn vào ô nhắn tin và nhấn "Gửi". AI sẽ xử lý yêu cầu
+        và cung cấp câu trả lời. Một số ví dụ câu hỏi:
+      </p>
+      <pre>
+Làm sao để tạo một playlist mới?
+Có thể chia sẻ playlist với bạn bè không?
+Spotify Chat có những tính năng gì?
+Làm sao để tìm nhạc theo thể loại nhất định?</pre
+      >
+
+      <h3>4. Lưu trữ cuộc hội thoại</h3>
+      <p>
+        Tất cả cuộc hội thoại với AI đều được lưu lại để bạn có thể tham khảo
+        sau này. Bạn có thể xem lại lịch sử hội thoại trong phần "Lịch sử hội
+        thoại AI" trong tài khoản của mình.
+      </p>
+
+      <div class="warning">
+        <strong>Lưu ý:</strong> AI Assistant là công cụ hỗ trợ và có thể không
+        hoàn hảo trong mọi tình huống. Vui lòng sử dụng với hiểu biết rằng đây
+        là công nghệ đang phát triển.
+      </div>
+
+      <h2>Tích hợp với Gemini API</h2>
+      <p>
+        AI Assistant sử dụng Gemini 2.0 Flash của Google để cung cấp câu trả lời
+        thông minh và cập nhật. Các câu trả lời được tối ưu hóa đặc biệt cho hệ
+        thống Spotify Chat và cập nhật thường xuyên với thông tin mới nhất.
+      </p>
+
+      <h2>Giới hạn và quyền riêng tư</h2>
+      <p>
+        Dữ liệu từ cuộc trò chuyện với AI Assistant được lưu trữ trong hệ thống
+        của chúng tôi để cải thiện chất lượng dịch vụ. Chúng tôi không chia sẻ
+        thông tin cá nhân hoặc nội dung trò chuyện với bên thứ ba, trừ khi được
+        yêu cầu theo quy định pháp luật.
+      </p>
+
+      <h2>Hỗ trợ thêm</h2>
+      <p>
+        Nếu bạn cần thêm hỗ trợ hoặc có phản hồi về AI Assistant, vui lòng liên
+        hệ với đội ngũ hỗ trợ của chúng tôi.
+      </p>
+
+      <a href="/api/v1/ai/chat/" class="btn">Bắt đầu chat với AI Assistant</a>
+    </div>
+  </body>
+</html>

@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'accounts.apps.AccountsConfig',
     'music.apps.MusicConfig',
     'chat.apps.ChatConfig',
+    'ai_assistant.apps.AIAssistantConfig',
 ]
 
 # Di chuyển environ xuống đây

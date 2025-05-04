@@ -1,13 +1,14 @@
 from django.shortcuts import get_object_or_404, render
 from django.http import JsonResponse
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions, viewsets, generics
+from rest_framework import status, permissions, viewsets, generics, filters
 from .models import (
     Playlist, Song, Album, Genre, Rating, Comment, SongPlayHistory, 
-    SearchHistory, Artist, Queue, QueueItem, UserStatus, LyricLine, Message, UserRecommendation
+    SearchHistory, Artist, Queue, QueueItem, UserStatus, LyricLine, Message, UserRecommendation,
+    CollaboratorRole, PlaylistEditHistory
 )
 from .serializers import (
     PlaylistSerializer, SongSerializer, AlbumSerializer, GenreSerializer, 
@@ -15,7 +16,8 @@ from .serializers import (
     SearchHistorySerializer, PlaylistDetailSerializer, SongDetailSerializer,
     AlbumDetailSerializer, GenreDetailSerializer, ArtistSerializer,
     QueueSerializer, UserStatusSerializer, LyricLineSerializer, MessageSerializer,
-    UserBasicSerializer
+    UserBasicSerializer, CollaboratorRoleSerializer, CollaboratorRoleCreateSerializer,
+    PlaylistEditHistorySerializer
 )
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -2066,3 +2068,462 @@ class SongRecommendationView(APIView):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# API cho Admin quản lý Collaborative Playlist
+class AdminCollaborativePlaylistListView(generics.ListAPIView):
+    """API để admin xem tất cả các collaborative playlist"""
+    permission_classes = [IsAdminUser]
+    serializer_class = PlaylistDetailSerializer
+    queryset = Playlist.objects.filter(is_collaborative=True)
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['name', 'description', 'user__username']
+    ordering_fields = ['name', 'created_at', 'updated_at']
+    
+    def get_queryset(self):
+        queryset = Playlist.objects.filter(is_collaborative=True).order_by('-updated_at')
+        
+        # Lọc theo chủ sở hữu
+        owner_id = self.request.query_params.get('owner_id')
+        if owner_id:
+            queryset = queryset.filter(user_id=owner_id)
+            
+        # Lọc theo người cộng tác
+        collaborator_id = self.request.query_params.get('collaborator_id')
+        if collaborator_id:
+            queryset = queryset.filter(collaborators__id=collaborator_id)
+            
+        # Lọc theo khoảng thời gian tạo
+        created_after = self.request.query_params.get('created_after')
+        created_before = self.request.query_params.get('created_before')
+        if created_after and created_before:
+            queryset = queryset.filter(created_at__range=[created_after, created_before])
+            
+        return queryset
+
+class AdminCollaborativePlaylistDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """API để admin xem chi tiết và chỉnh sửa một collaborative playlist"""
+    permission_classes = [IsAdminUser]
+    serializer_class = PlaylistDetailSerializer
+    queryset = Playlist.objects.filter(is_collaborative=True)
+    
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        
+        # Lưu lại thông tin cũ để ghi vào lịch sử
+        old_data = {
+            'name': instance.name,
+            'description': instance.description,
+            'is_public': instance.is_public
+        }
+        
+        self.perform_update(serializer)
+        
+        # Ghi nhật ký hành động
+        new_data = {
+            'name': instance.name,
+            'description': instance.description,
+            'is_public': instance.is_public
+        }
+        
+        # Chỉ ghi nhật ký nếu có thay đổi
+        if old_data != new_data:
+            details = {
+                'old': old_data,
+                'new': new_data,
+                'admin_action': True
+            }
+            
+            PlaylistEditHistory.log_action(
+                playlist=instance,
+                user=request.user,
+                action='UPDATE_INFO',
+                details=details
+            )
+        
+        return Response(serializer.data)
+    
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        
+        # Ghi log trước khi xóa
+        PlaylistEditHistory.log_action(
+            playlist=instance,
+            user=request.user,
+            action='DELETE',
+            details={'admin_action': True}
+        )
+        
+        self.perform_destroy(instance)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+class AdminPlaylistCollaboratorsView(generics.ListAPIView):
+    """API để admin xem danh sách người cộng tác của một playlist"""
+    permission_classes = [IsAdminUser]
+    serializer_class = CollaboratorRoleSerializer
+    
+    def get_queryset(self):
+        playlist_id = self.kwargs.get('playlist_id')
+        return CollaboratorRole.objects.filter(playlist_id=playlist_id)
+
+class AdminAddCollaboratorView(generics.CreateAPIView):
+    """API để admin thêm người cộng tác vào playlist"""
+    permission_classes = [IsAdminUser]
+    serializer_class = CollaboratorRoleCreateSerializer
+    
+    def perform_create(self, serializer):
+        collaborator_role = serializer.save(added_by=self.request.user)
+        
+        # Ghi nhật ký hành động
+        PlaylistEditHistory.log_action(
+            playlist=collaborator_role.playlist,
+            user=self.request.user,
+            action='ADD_COLLABORATOR',
+            details={
+                'role': collaborator_role.role,
+                'admin_action': True
+            },
+            related_user=collaborator_role.user
+        )
+
+class AdminRemoveCollaboratorView(APIView):
+    """API để admin xóa người cộng tác khỏi playlist"""
+    permission_classes = [IsAdminUser]
+    
+    def delete(self, request, playlist_id, user_id):
+        try:
+            playlist = Playlist.objects.get(id=playlist_id, is_collaborative=True)
+            user = User.objects.get(id=user_id)
+            
+            # Kiểm tra xem người dùng có phải là chủ sở hữu không
+            if user == playlist.user:
+                return Response(
+                    {"error": "Không thể xóa chủ sở hữu playlist khỏi danh sách cộng tác viên"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # Kiểm tra xem người dùng có phải là cộng tác viên không
+            try:
+                role = CollaboratorRole.objects.get(playlist=playlist, user=user)
+                role.delete()
+                
+                # Ghi nhật ký hành động
+                PlaylistEditHistory.log_action(
+                    playlist=playlist,
+                    user=request.user,
+                    action='REMOVE_COLLABORATOR',
+                    details={'admin_action': True},
+                    related_user=user
+                )
+                
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            except CollaboratorRole.DoesNotExist:
+                return Response(
+                    {"error": "Người dùng không phải là cộng tác viên của playlist này"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        except Playlist.DoesNotExist:
+            return Response(
+                {"error": "Không tìm thấy playlist collaborative"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Không tìm thấy người dùng"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+class AdminChangeCollaboratorRoleView(APIView):
+    """API để admin thay đổi vai trò của người cộng tác"""
+    permission_classes = [IsAdminUser]
+    
+    def post(self, request, playlist_id, user_id):
+        try:
+            playlist = Playlist.objects.get(id=playlist_id, is_collaborative=True)
+            user = User.objects.get(id=user_id)
+            
+            # Kiểm tra xem người dùng có phải là chủ sở hữu không
+            if user == playlist.user:
+                return Response(
+                    {"error": "Không thể thay đổi vai trò của chủ sở hữu playlist"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+                
+            # Kiểm tra xem người dùng có phải là cộng tác viên không
+            try:
+                role = CollaboratorRole.objects.get(playlist=playlist, user=user)
+                
+                # Lấy vai trò mới từ request
+                new_role = request.data.get('role')
+                if not new_role or new_role not in [choice[0] for choice in CollaboratorRole.ROLE_CHOICES]:
+                    return Response(
+                        {"error": f"Vai trò không hợp lệ. Các vai trò hợp lệ: {[choice[0] for choice in CollaboratorRole.ROLE_CHOICES]}"},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                    
+                old_role = role.role
+                role.role = new_role
+                role.save()
+                
+                # Ghi nhật ký hành động
+                PlaylistEditHistory.log_action(
+                    playlist=playlist,
+                    user=request.user,
+                    action='CHANGE_ROLE',
+                    details={
+                        'old_role': old_role,
+                        'new_role': new_role,
+                        'admin_action': True
+                    },
+                    related_user=user
+                )
+                
+                return Response(CollaboratorRoleSerializer(role).data)
+            except CollaboratorRole.DoesNotExist:
+                return Response(
+                    {"error": "Người dùng không phải là cộng tác viên của playlist này"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        except Playlist.DoesNotExist:
+            return Response(
+                {"error": "Không tìm thấy playlist collaborative"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Không tìm thấy người dùng"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+class AdminPlaylistEditHistoryView(generics.ListAPIView):
+    """API để admin xem lịch sử chỉnh sửa của một playlist"""
+    permission_classes = [IsAdminUser]
+    serializer_class = PlaylistEditHistorySerializer
+    
+    def get_queryset(self):
+        playlist_id = self.kwargs.get('playlist_id')
+        return PlaylistEditHistory.objects.filter(playlist_id=playlist_id).order_by('-timestamp')
+        
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        return context
+
+class AdminRestorePlaylistView(APIView):
+    """API để admin khôi phục playlist về một phiên bản trước đó"""
+    permission_classes = [IsAdminUser]
+    
+    def post(self, request, playlist_id):
+        # Lấy ID của bản ghi lịch sử cần khôi phục
+        history_id = request.data.get('history_id')
+        if not history_id:
+            return Response(
+                {"error": "Cần cung cấp ID của bản ghi lịch sử để khôi phục"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            playlist = Playlist.objects.get(id=playlist_id, is_collaborative=True)
+            history_entry = PlaylistEditHistory.objects.get(id=history_id, playlist=playlist)
+            
+            # Xử lý khôi phục dựa trên loại hành động
+            if history_entry.action == 'UPDATE_INFO':
+                # Khôi phục thông tin từ bản ghi lịch sử
+                old_data = history_entry.details.get('old', {})
+                if old_data:
+                    for key, value in old_data.items():
+                        if hasattr(playlist, key):
+                            setattr(playlist, key, value)
+                    playlist.save()
+                    
+                    # Ghi nhật ký hành động khôi phục
+                    PlaylistEditHistory.log_action(
+                        playlist=playlist,
+                        user=request.user,
+                        action='RESTORE',
+                        details={
+                            'restored_from': history_id,
+                            'admin_action': True
+                        }
+                    )
+                    
+                    return Response({"status": "Đã khôi phục thông tin playlist thành công"})
+            elif history_entry.action in ['ADD_SONG', 'REMOVE_SONG']:
+                # Khôi phục bài hát nếu có
+                if history_entry.related_song:
+                    if history_entry.action == 'ADD_SONG':
+                        # Nếu trước đó là thêm bài hát, giờ ta xóa nó
+                        playlist.songs.remove(history_entry.related_song)
+                    else:
+                        # Nếu trước đó là xóa bài hát, giờ ta thêm lại
+                        playlist.songs.add(history_entry.related_song)
+                        
+                    PlaylistEditHistory.log_action(
+                        playlist=playlist,
+                        user=request.user,
+                        action='RESTORE',
+                        details={
+                            'restored_from': history_id,
+                            'admin_action': True
+                        },
+                        related_song=history_entry.related_song
+                    )
+                    
+                    return Response({"status": "Đã khôi phục bài hát thành công"})
+            
+            # Các trường hợp không hỗ trợ khôi phục
+            return Response(
+                {"error": f"Không hỗ trợ khôi phục cho hành động {history_entry.get_action_display()}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Playlist.DoesNotExist:
+            return Response(
+                {"error": "Không tìm thấy playlist collaborative"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except PlaylistEditHistory.DoesNotExist:
+            return Response(
+                {"error": "Không tìm thấy bản ghi lịch sử"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+class AdminTopSongsReportView(APIView):
+    """API hiển thị báo cáo chi tiết về top bài hát cho admin"""
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request, format=None):
+        # Lấy tham số từ request
+        period = request.query_params.get('period', 'month')  # Mặc định là thống kê theo tháng
+        limit = int(request.query_params.get('limit', 20))    # Số lượng bài hát hiển thị
+        
+        # Xác định khoảng thời gian dựa trên period
+        now = django.utils.timezone.now()
+        if period == 'week':
+            start_date = now - timedelta(days=7)
+            period_label = '7 ngày qua'
+        elif period == 'month':
+            start_date = now - timedelta(days=30)
+            period_label = '30 ngày qua'
+        elif period == 'year':
+            start_date = now - timedelta(days=365)
+            period_label = '365 ngày qua'
+        else:  # Mặc định là all
+            start_date = None
+            period_label = 'Tất cả thời gian'
+        
+        # Query bài hát
+        if start_date:
+            # Lấy số lượng play trong khoảng thời gian
+            recent_plays = SongPlayHistory.objects.filter(
+                played_at__gte=start_date
+            ).values('song').annotate(
+                recent_play_count=Count('id')
+            ).order_by('-recent_play_count')[:limit]
+            
+            # Lấy thông tin bài hát
+            song_ids = [item['song'] for item in recent_plays]
+            songs = Song.objects.filter(id__in=song_ids)
+            
+            # Kết hợp dữ liệu
+            results = []
+            for song in songs:
+                play_item = next((item for item in recent_plays if item['song'] == song.id), None)
+                if play_item:
+                    results.append({
+                        'id': song.id,
+                        'title': song.title,
+                        'artist': song.artist,
+                        'album': song.album,
+                        'total_plays': song.play_count,
+                        'recent_plays': play_item['recent_play_count'],
+                        'likes': song.likes_count,
+                    })
+            
+            # Sắp xếp lại theo số lượt nghe gần đây
+            results = sorted(results, key=lambda x: x['recent_plays'], reverse=True)
+            
+        else:
+            # Lấy bài hát có lượt play cao nhất mọi thời gian
+            top_songs = Song.objects.all().order_by('-play_count')[:limit]
+            results = []
+            for song in top_songs:
+                results.append({
+                    'id': song.id,
+                    'title': song.title,
+                    'artist': song.artist,
+                    'album': song.album,
+                    'total_plays': song.play_count,
+                    'recent_plays': song.play_count,
+                    'likes': song.likes_count,
+                })
+        
+        return Response({
+            'period': period_label,
+            'generated_at': now.strftime('%Y-%m-%d %H:%M:%S'),
+            'results': results
+        })
+
+class AdminTopGenresReportView(APIView):
+    """API hiển thị báo cáo chi tiết về top thể loại nhạc cho admin"""
+    permission_classes = [permissions.IsAdminUser]
+    
+    def get(self, request, format=None):
+        # Lấy tham số từ request
+        period = request.query_params.get('period', 'month')  # Mặc định là thống kê theo tháng
+        
+        # Xác định khoảng thời gian dựa trên period
+        now = django.utils.timezone.now()
+        if period == 'week':
+            start_date = now - timedelta(days=7)
+            period_label = '7 ngày qua'
+        elif period == 'month':
+            start_date = now - timedelta(days=30)
+            period_label = '30 ngày qua'
+        elif period == 'year':
+            start_date = now - timedelta(days=365)
+            period_label = '365 ngày qua'
+        else:  # Mặc định là all
+            start_date = None
+            period_label = 'Tất cả thời gian'
+        
+        # Thống kê theo thể loại
+        if start_date:
+            # Lấy lượt play theo thể loại trong khoảng thời gian
+            recent_plays_by_genre = {}
+            for play in SongPlayHistory.objects.filter(played_at__gte=start_date).select_related('song'):
+                genre = play.song.genre if play.song.genre else "Không xác định"
+                recent_plays_by_genre[genre] = recent_plays_by_genre.get(genre, 0) + 1
+            
+            # Các thông tin khác về thể loại
+            genre_stats = []
+            for genre, play_count in recent_plays_by_genre.items():
+                genre_songs = Song.objects.filter(genre=genre)
+                top_songs = genre_songs.order_by('-play_count')[:5]
+                
+                genre_stats.append({
+                    'genre': genre,
+                    'song_count': genre_songs.count(),
+                    'recent_plays': play_count,
+                    'avg_song_plays': genre_songs.aggregate(Avg('play_count'))['play_count__avg'] or 0,
+                    'top_songs': [
+                        {'id': song.id, 'title': song.title, 'artist': song.artist, 'plays': song.play_count}
+                        for song in top_songs
+                    ]
+                })
+            
+            # Sắp xếp theo lượt play gần đây
+            genre_stats = sorted(genre_stats, key=lambda x: x['recent_plays'], reverse=True)
+            
+        else:
+            # Thống kê mọi thời gian
+            all_genres = set(Song.objects.values_list('genre', flat=True).distinct())
+            genre_stats = []
+            
+            for genre in all_genres:
+                if not genre:
+                    continue
+                
+                genre_songs = Song.objects.filter(genre=genre)
+                top_songs = genre_songs.order_by('-play_count')[:5]
+                total_plays = genre_songs.aggregate(Sum('play_count'))['play_count__sum'] or 0

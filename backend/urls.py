@@ -62,5 +62,8 @@ urlpatterns = [
         path('swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
         path('redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
     ])),
+    
+    # AI Assistant Endpoints
+    path('api/v1/ai/', include('ai_assistant.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 

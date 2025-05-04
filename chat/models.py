@@ -14,6 +14,14 @@ class Message(models.Model):
         ('FILE', 'File Attachment'),
     )
 
+    CONTENT_STATUS = (
+        ('NORMAL', 'Normal Content'),
+        ('FLAGGED', 'Flagged by System'),
+        ('REPORTED', 'Reported by User'),
+        ('REVIEWED', 'Reviewed by Admin'),
+        ('HIDDEN', 'Hidden by Admin'),
+    )
+
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_sent_messages')
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_received_messages')
     content = models.TextField(blank=True)
@@ -31,6 +39,13 @@ class Message(models.Model):
                                     null=True, blank=True, related_name='chat_messages')
     shared_playlist = models.ForeignKey('music.Playlist', on_delete=models.SET_NULL, 
                                        null=True, blank=True, related_name='chat_messages')
+    
+    # Thêm trường cho kiểm duyệt
+    content_status = models.CharField(max_length=10, choices=CONTENT_STATUS, default='NORMAL')
+    review_note = models.TextField(blank=True, help_text="Ghi chú của admin khi kiểm duyệt")
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, 
+                                  null=True, blank=True, related_name='reviewed_messages')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'chat_messages'
@@ -63,3 +78,68 @@ class Message(models.Model):
         elif self.attachment:
             self.message_type = 'FILE'
         super().save(*args, **kwargs)
+
+class MessageReport(models.Model):
+    REPORT_REASONS = (
+        ('INAPPROPRIATE', 'Nội dung không phù hợp'),
+        ('SPAM', 'Tin nhắn spam'),
+        ('HARASSMENT', 'Quấy rối'),
+        ('HATE_SPEECH', 'Phát ngôn thù ghét'),
+        ('OTHER', 'Lý do khác'),
+    )
+    
+    REPORT_STATUS = (
+        ('PENDING', 'Đang chờ xử lý'),
+        ('REVIEWED', 'Đã xem xét'),
+        ('RESOLVED', 'Đã giải quyết'),
+        ('DISMISSED', 'Bác bỏ'),
+    )
+    
+    message = models.ForeignKey(Message, on_delete=models.CASCADE, related_name='reports')
+    reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name='reported_messages')
+    reason = models.CharField(max_length=20, choices=REPORT_REASONS)
+    description = models.TextField(blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=10, choices=REPORT_STATUS, default='PENDING')
+    handled_by = models.ForeignKey(User, on_delete=models.SET_NULL, 
+                                 null=True, blank=True, related_name='handled_reports')
+    handled_at = models.DateTimeField(null=True, blank=True)
+    action_taken = models.TextField(blank=True, help_text="Hành động đã thực hiện đối với báo cáo này")
+    
+    class Meta:
+        db_table = 'chat_message_reports'
+        
+    def __str__(self):
+        return f"Report on message {self.message.id} by {self.reporter.username}"
+
+class ChatRestriction(models.Model):
+    RESTRICTION_TYPES = (
+        ('TEMPORARY', 'Hạn chế tạm thời'),
+        ('PERMANENT', 'Hạn chế vĩnh viễn'),
+        ('WARNING', 'Cảnh báo'),
+    )
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_restrictions')
+    restriction_type = models.CharField(max_length=10, choices=RESTRICTION_TYPES)
+    reason = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, 
+                                 null=True, related_name='created_restrictions')
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        db_table = 'chat_restrictions'
+        
+    def __str__(self):
+        return f"{self.restriction_type} restriction for {self.user.username}"
+        
+    @property
+    def is_expired(self):
+        """Kiểm tra xem hạn chế đã hết hạn chưa"""
+        if self.restriction_type == 'PERMANENT':
+            return False
+        if not self.expires_at:
+            return False
+        from django.utils import timezone
+        return timezone.now() > self.expires_at

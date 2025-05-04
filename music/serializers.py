@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from .models import (
     Song, Playlist, Album, Genre, Rating, Comment, SongPlayHistory, 
-    SearchHistory, UserActivity, LyricLine, Artist, Queue, QueueItem, UserStatus, Message
+    SearchHistory, UserActivity, LyricLine, Artist, Queue, QueueItem, UserStatus, Message, CollaboratorRole, PlaylistEditHistory
 )
 from django.contrib.auth import get_user_model
 from django.conf import settings
@@ -142,40 +142,75 @@ class SongDetailSerializer(serializers.ModelSerializer):
 
 class PlaylistSerializer(serializers.ModelSerializer):
     user = UserBasicSerializer(read_only=True)
-    songs_count = serializers.SerializerMethodField()
-    cover_image = serializers.SerializerMethodField()
-    
+    is_collaborative = serializers.BooleanField(read_only=True)
+    collaborators_count = serializers.SerializerMethodField()
+
     class Meta:
         model = Playlist
-        fields = ('id', 'name', 'description', 'is_public', 'cover_image', 
-                 'user', 'songs_count', 'created_at', 'updated_at')
-        
-    def get_songs_count(self, obj):
-        return obj.songs.count()
-        
-    def get_cover_image(self, obj):
-        if obj.cover_image:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.cover_image.url)
-            # Nếu không có request, sử dụng SITE_URL từ settings
-            return f"{settings.SITE_URL}{obj.cover_image.url}"
-        return None
+        fields = ['id', 'name', 'user', 'description', 'is_public', 'cover_image', 
+                  'created_at', 'updated_at', 'is_collaborative', 'collaborators_count']
+        read_only_fields = ['user', 'created_at', 'updated_at', 'collaborators_count']
+
+    def get_collaborators_count(self, obj):
+        return obj.collaborators.count()
 
 class PlaylistDetailSerializer(serializers.ModelSerializer):
     user = UserBasicSerializer(read_only=True)
     songs = SongSerializer(many=True, read_only=True)
     followers_count = serializers.SerializerMethodField()
-    cover_image = serializers.SerializerMethodField()
-    
+    is_collaborative = serializers.BooleanField(read_only=True)
+    collaborators = serializers.SerializerMethodField()
+
     class Meta:
         model = Playlist
-        fields = ('id', 'name', 'description', 'is_public', 'cover_image', 
-                 'user', 'songs', 'followers_count', 'created_at', 'updated_at')
-        
+        fields = ['id', 'name', 'user', 'description', 'is_public', 'cover_image', 
+                  'songs', 'created_at', 'updated_at', 'followers_count', 
+                  'is_collaborative', 'collaborators']
+        read_only_fields = ['user', 'created_at', 'updated_at', 'followers_count']
+
     def get_followers_count(self, obj):
         return obj.followers.count()
         
+    def get_collaborators(self, obj):
+        if not obj.is_collaborative:
+            return []
+        return CollaboratorRoleSerializer(
+            obj.role_assignments.all(), many=True, context=self.context
+        ).data
+
+class CollaboratorRoleSerializer(serializers.ModelSerializer):
+    user = UserBasicSerializer(read_only=True)
+    playlist = serializers.PrimaryKeyRelatedField(read_only=True)
+    added_by = UserBasicSerializer(read_only=True)
+    
+    class Meta:
+        model = CollaboratorRole
+        fields = ['id', 'user', 'playlist', 'role', 'added_by', 'added_at']
+        read_only_fields = ['added_by', 'added_at']
+
+class CollaboratorRoleCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CollaboratorRole
+        fields = ['user', 'playlist', 'role']
+        
+    def validate(self, data):
+        # Kiểm tra xem playlist có phải collaborative không
+        playlist = data.get('playlist')
+        if not playlist.is_collaborative:
+            raise serializers.ValidationError(
+                "Không thể thêm cộng tác viên vào playlist không phải là collaborative")
+                
+        # Kiểm tra xem user đã là cộng tác viên của playlist chưa
+        user = data.get('user')
+        if CollaboratorRole.objects.filter(playlist=playlist, user=user).exists():
+            raise serializers.ValidationError(
+                "Người dùng này đã là cộng tác viên của playlist")
+                
+        # Không thể thêm chủ sở hữu playlist làm cộng tác viên
+        if user == playlist.user:
+            raise serializers.ValidationError(
+                "Không thể thêm chủ sở hữu playlist làm cộng tác viên")
+                
     def get_cover_image(self, obj):
         if obj.cover_image:
             request = self.context.get('request')
@@ -361,3 +396,109 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = ('id', 'sender', 'receiver', 'content', 'timestamp', 'is_read', 
                  'message_type', 'shared_song', 'shared_playlist', 'attachment', 'image', 'voice_note')
         read_only_fields = ('id', 'timestamp', 'is_read') 
+
+class PlaylistEditHistorySerializer(serializers.ModelSerializer):
+    user = UserBasicSerializer(read_only=True)
+    related_song = SongBasicSerializer(read_only=True)
+    related_user = UserBasicSerializer(read_only=True)
+    action_display = serializers.CharField(source='get_action_display', read_only=True)
+    
+    class Meta:
+        model = PlaylistEditHistory
+        fields = ['id', 'playlist', 'user', 'action', 'action_display', 'timestamp', 
+                  'details', 'related_song', 'related_user']
+        read_only_fields = ['playlist', 'user', 'action', 'timestamp', 
+                          'details', 'related_song', 'related_user']
+
+
+class CollaborativePlaylistCreateSerializer(serializers.ModelSerializer):
+    """Serializer để tạo Collaborative Playlist mới"""
+    initial_collaborators = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        write_only=True
+    )
+    
+    class Meta:
+        model = Playlist
+        fields = ['name', 'description', 'is_public', 'cover_image', 
+                  'is_collaborative', 'initial_collaborators']
+        
+    def validate(self, data):
+        # Đảm bảo is_collaborative = True
+        data['is_collaborative'] = True
+        return data
+        
+    def create(self, validated_data):
+        initial_collaborators = validated_data.pop('initial_collaborators', [])
+        
+        # Tạo playlist
+        playlist = Playlist.objects.create(**validated_data)
+        
+        # Thêm người cộng tác ban đầu (nếu có)
+        user_model = get_user_model()
+        for user_id in initial_collaborators:
+            try:
+                collaborator = user_model.objects.get(id=user_id)
+                # Bỏ qua nếu người dùng là chủ sở hữu
+                if collaborator != playlist.user:
+                    CollaboratorRole.objects.create(
+                        user=collaborator,
+                        playlist=playlist,
+                        role='EDITOR',
+                        added_by=playlist.user
+                    )
+            except user_model.DoesNotExist:
+                pass
+        
+        # Ghi nhật ký hành động
+        PlaylistEditHistory.log_action(
+            playlist=playlist,
+            user=playlist.user,
+            action='CREATE',
+            details={'name': playlist.name, 'collaborative': True}
+        )
+        
+        return playlist 
+
+class AdminCollaborativePlaylistListSerializer(serializers.ModelSerializer):
+    owner = UserBasicSerializer(read_only=True)
+    collaborator_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Playlist
+        fields = ['id', 'name', 'description', 'owner', 'cover_image', 'created_at', 'is_collaborative', 'collaborator_count']
+    
+    def get_collaborator_count(self, obj):
+        return obj.collaborators.count()
+
+class AdminCollaboratorDetailSerializer(serializers.ModelSerializer):
+    user = UserBasicSerializer(read_only=True)
+    
+    class Meta:
+        model = CollaboratorRole
+        fields = ['id', 'user', 'role', 'added_at']
+
+class AdminCollaboratorAddSerializer(serializers.Serializer):
+    user_id = serializers.IntegerField()
+    role = serializers.ChoiceField(choices=CollaboratorRole.ROLE_CHOICES)
+    
+    def validate_user_id(self, value):
+        try:
+            User.objects.get(id=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("User does not exist")
+        return value
+
+class AdminCollaboratorRoleSerializer(serializers.Serializer):
+    role = serializers.ChoiceField(choices=CollaboratorRole.ROLE_CHOICES)
+
+class AdminRestorePlaylistSerializer(serializers.Serializer):
+    history_id = serializers.IntegerField()
+    
+    def validate_history_id(self, value):
+        try:
+            PlaylistEditHistory.objects.get(id=value)
+        except PlaylistEditHistory.DoesNotExist:
+            raise serializers.ValidationError("History entry does not exist")
+        return value 

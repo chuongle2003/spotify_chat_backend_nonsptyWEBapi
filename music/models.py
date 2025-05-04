@@ -35,6 +35,10 @@ class Playlist(models.Model):
     followers = models.ManyToManyField(User, related_name='followed_playlists', blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    
+    # Thêm trường cho Collaborative Playlist
+    is_collaborative = models.BooleanField(default=False, help_text="Playlist có thể được chỉnh sửa bởi nhiều người cộng tác")
+    collaborators = models.ManyToManyField(User, through='CollaboratorRole', related_name='collaborative_playlists', through_fields=('playlist', 'user'))
 
     class Meta:
         db_table = 'playlists'
@@ -46,7 +50,98 @@ class Playlist(models.Model):
     def can_access(self, user):
         if self.is_public:
             return True
-        return user == self.user
+        return user == self.user or (self.is_collaborative and user in self.collaborators.all())
+    
+    def can_edit(self, user):
+        """Kiểm tra xem người dùng có quyền chỉnh sửa playlist không"""
+        # Chủ sở hữu luôn có quyền chỉnh sửa
+        if user == self.user:
+            return True
+        
+        # Admin luôn có quyền chỉnh sửa
+        if user.is_admin:
+            return True
+        
+        # Kiểm tra xem người dùng có phải là người cộng tác có quyền chỉnh sửa không
+        if self.is_collaborative:
+            try:
+                role = CollaboratorRole.objects.get(playlist=self, user=user)
+                return role.can_edit
+            except CollaboratorRole.DoesNotExist:
+                return False
+                
+        return False
+
+class CollaboratorRole(models.Model):
+    """Model để lưu trữ vai trò của người cộng tác trong playlist"""
+    ROLE_CHOICES = (
+        ('EDITOR', 'Người chỉnh sửa'),
+        ('VIEWER', 'Người xem'),
+    )
+    
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='playlist_roles')
+    playlist = models.ForeignKey(Playlist, on_delete=models.CASCADE, related_name='role_assignments')
+    role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='VIEWER')
+    added_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='added_collaborators')
+    added_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        db_table = 'playlist_collaborator_roles'
+        unique_together = ('user', 'playlist')
+        
+    def __str__(self):
+        return f"{self.user.username} as {self.role} on {self.playlist.name}"
+        
+    @property
+    def can_edit(self):
+        """Kiểm tra xem vai trò có quyền chỉnh sửa không"""
+        return self.role == 'EDITOR'
+
+class PlaylistEditHistory(models.Model):
+    """Lưu lịch sử chỉnh sửa của playlist"""
+    ACTION_TYPES = (
+        ('CREATE', 'Tạo mới'),
+        ('UPDATE_INFO', 'Cập nhật thông tin'),
+        ('ADD_SONG', 'Thêm bài hát'),
+        ('REMOVE_SONG', 'Xóa bài hát'),
+        ('ADD_COLLABORATOR', 'Thêm cộng tác viên'),
+        ('REMOVE_COLLABORATOR', 'Xóa cộng tác viên'),
+        ('CHANGE_ROLE', 'Thay đổi vai trò'),
+        ('RESTORE', 'Khôi phục'),
+    )
+    
+    playlist = models.ForeignKey(Playlist, on_delete=models.CASCADE, related_name='edit_history')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='playlist_edits')
+    action = models.CharField(max_length=20, choices=ACTION_TYPES)
+    timestamp = models.DateTimeField(auto_now_add=True)
+    details = models.JSONField(default=dict, help_text="Chi tiết về hành động chỉnh sửa")
+    
+    # Tham chiếu đến đối tượng liên quan (nếu có)
+    related_song = models.ForeignKey(Song, on_delete=models.SET_NULL, null=True, blank=True, related_name='playlist_history')
+    related_user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='playlist_history_mentions')
+    
+    class Meta:
+        db_table = 'playlist_edit_history'
+        ordering = ['-timestamp']
+        
+    def __str__(self):
+        user_name = self.user.username if self.user else "Unknown User"
+        return f"{user_name} {self.get_action_display()} on {self.playlist.name} at {self.timestamp}"
+        
+    @classmethod
+    def log_action(cls, playlist, user, action, details=None, related_song=None, related_user=None):
+        """Helper method để tạo bản ghi lịch sử mới"""
+        if details is None:
+            details = {}
+            
+        return cls.objects.create(
+            playlist=playlist,
+            user=user,
+            action=action,
+            details=details,
+            related_song=related_song,
+            related_user=related_user
+        )
 
 class Message(models.Model):
     MESSAGE_TYPES = (

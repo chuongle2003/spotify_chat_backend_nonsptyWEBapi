@@ -79,6 +79,23 @@ urlpatterns = [
     path('search-history/', SearchHistoryView.as_view(), name='search-history'),
     path('search-history/delete/', SearchHistoryView.as_view(), name='delete-search-history'),
     path('recommendations/songs/', SongRecommendationView.as_view(), name='song-recommendations'),
+    
+    # Admin Collaborative Playlist API 
+    path('admin/playlists/collaborative/', views.AdminCollaborativePlaylistListView.as_view(), name='admin-collaborative-playlists'),
+    path('admin/playlists/collaborative/<int:pk>/', views.AdminCollaborativePlaylistDetailView.as_view(), name='admin-collaborative-playlist-detail'),
+    path('admin/playlists/<int:playlist_id>/collaborators/', views.AdminPlaylistCollaboratorsView.as_view(), name='admin-playlist-collaborators'),
+    path('admin/playlists/<int:playlist_id>/collaborators/add/', views.AdminAddCollaboratorView.as_view(), name='admin-add-collaborator'),
+    path('admin/playlists/<int:playlist_id>/collaborators/<int:user_id>/', views.AdminRemoveCollaboratorView.as_view(), name='admin-remove-collaborator'),
+    path('admin/playlists/<int:playlist_id>/collaborators/<int:user_id>/role/', views.AdminChangeCollaboratorRoleView.as_view(), name='admin-change-collaborator-role'),
+    path('admin/playlists/<int:playlist_id>/edit_history/', views.AdminPlaylistEditHistoryView.as_view(), name='admin-playlist-edit-history'),
+    path('admin/playlists/<int:playlist_id>/restore/', views.AdminRestorePlaylistView.as_view(), name='admin-restore-playlist'),
+    
+    # Admin Statistics và Reports
+    path('admin/statistics/', views.AdminStatisticsView.as_view(), name='admin-statistics'),
+    path('admin/user-activity/', views.AdminUserActivityView.as_view(), name='admin-user-activity'),
+    path('admin/user-activity/<int:user_id>/', views.AdminUserActivityView.as_view(), name='admin-user-activity-detail'),
+    path('admin/reports/top-songs/', views.AdminTopSongsReportView.as_view(), name='admin-top-songs-report'),
+    path('admin/reports/top-genres/', views.AdminTopGenresReportView.as_view(), name='admin-top-genres-report'),
 ]
 if settings.DEBUG:
       urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
