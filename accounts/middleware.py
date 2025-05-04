@@ -30,15 +30,18 @@ class PermissionMiddleware:
         Bỏ qua kiểm tra quyền cho các endpoint không cần xác thực
         """
         # Skip for authentication endpoints
-        if request.path.startswith('/api/auth/') or request.path.startswith('/api/token/'):
+        if (request.path.startswith('/api/auth/') or 
+            request.path.startswith('/api/token/') or
+            request.path.startswith('/api/v1/auth/') or 
+            request.path.startswith('/api/v1/token/')):
             return True
             
         # Skip for public endpoints
-        if request.path.startswith('/api/public/'):
+        if request.path.startswith('/api/public/') or request.path.startswith('/api/v1/public/'):
             return True
             
         # Skip for non-API paths
-        if not request.path.startswith('/api/'):
+        if not (request.path.startswith('/api/') or request.path.startswith('/api/v1/')):
             return True
             
         # Skip for CORS preflight requests
@@ -59,11 +62,11 @@ class PermissionMiddleware:
         path = request.path
         
         # Admin can access everything
-        if user.is_admin:
+        if hasattr(user, 'is_admin') and user.is_admin:
             return True
             
         # Check for admin URLs - non-admin users cannot access admin routes
-        if 'admin' in path and not user.is_admin:
+        if ('admin' in path) and not (hasattr(user, 'is_admin') and user.is_admin):
             return False
             
         # For all other endpoints, let DRF permission classes handle it

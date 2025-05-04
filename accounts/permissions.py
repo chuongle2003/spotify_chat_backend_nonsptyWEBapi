@@ -5,7 +5,8 @@ class IsAdminUser(permissions.BasePermission):
     Custom permission to only allow admin users to access the view.
     """
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_admin)
+        return bool(request.user and request.user.is_authenticated and 
+                   hasattr(request.user, 'is_admin') and request.user.is_admin)
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
     """
@@ -18,7 +19,7 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
             return True
 
         # Write permissions are only allowed to the owner of the object
-        return obj == request.user or request.user.is_admin
+        return obj == request.user or (hasattr(request.user, 'is_admin') and request.user.is_admin)
 
 class ReadOnly(permissions.BasePermission):
     """
