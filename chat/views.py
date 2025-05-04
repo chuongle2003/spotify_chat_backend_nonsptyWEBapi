@@ -4,7 +4,7 @@ from rest_framework import generics, status, filters
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import Q, Count, Max, F, ExpressionWrapper, DateTimeField
+from django.db.models import Q, Count
 from django.contrib.auth import get_user_model
 from datetime import timedelta
 
@@ -21,20 +21,17 @@ User = get_user_model()
 # Create your views here.
 
 # API cho người dùng thông thường
-class MessageListView(generics.ListAPIView):
-    """API để lấy lịch sử tin nhắn với một người dùng cụ thể"""
+class MessageListView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated, IsNotRestricted]
     serializer_class = MessageSerializer
-    permission_classes = [IsAuthenticated]
-    
+
     def get_queryset(self):
-        username = self.kwargs.get('username')
-        other_user = get_object_or_404(User, username=username)
-        
-        # Lấy tất cả tin nhắn giữa hai người dùng
         return Message.objects.filter(
-            (Q(sender=self.request.user) & Q(receiver=other_user)) | 
-            (Q(sender=other_user) & Q(receiver=self.request.user))
-        ).order_by('-created_at')
+            Q(sender=self.request.user) | Q(receiver=self.request.user)
+        ).order_by('-timestamp')
+
+    def perform_create(self, serializer):
+        serializer.save(sender=self.request.user)
 
 class MessageDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAuthenticated, IsMessageParticipant]
@@ -45,64 +42,39 @@ class MessageDetailView(generics.RetrieveUpdateDestroyAPIView):
             Q(sender=self.request.user) | Q(receiver=self.request.user)
         )
 
-class ConversationListView(APIView):
-    """API để lấy danh sách các cuộc trò chuyện"""
+class ConversationListView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
-    
-    def get(self, request):
-        # Lấy danh sách người dùng đã từng nhắn tin với người dùng hiện tại
-        sent_messages = Message.objects.filter(sender=request.user)
-        received_messages = Message.objects.filter(receiver=request.user)
-        
-        # Lấy ID của tất cả người đã từng tương tác
-        sender_ids = received_messages.values_list('sender', flat=True).distinct()
-        receiver_ids = sent_messages.values_list('receiver', flat=True).distinct()
-        
-        # Kết hợp tất cả ID thành một danh sách duy nhất
-        user_ids = set(list(sender_ids) + list(receiver_ids))
-        
-        # Loại bỏ ID của người dùng hiện tại nếu có
-        if request.user.id in user_ids:
-            user_ids.remove(request.user.id)
-        
-        # Lấy thông tin chi tiết của người dùng
-        conversation_users = User.objects.filter(id__in=user_ids)
-        
-        # Lấy tin nhắn gần nhất và số tin nhắn chưa đọc cho mỗi cuộc trò chuyện
-        conversations = []
-        for user in conversation_users:
-            # Lấy tin nhắn gần nhất
-            latest_message = Message.objects.filter(
-                (Q(sender=request.user) & Q(receiver=user)) | 
-                (Q(sender=user) & Q(receiver=request.user))
-            ).order_by('-created_at').first()
-            
-            # Đếm số tin nhắn chưa đọc
-            unread_count = Message.objects.filter(
-                sender=user,
-                receiver=request.user,
-                is_read=False
-            ).count()
-            
-            if latest_message:
-                conversations.append({
-                    'user': {
-                        'id': user.id,
-                        'username': user.username,
-                        'avatar': user.avatar.url if user.avatar else None
-                    },
-                    'latest_message': {
-                        'content': latest_message.content,
-                        'timestamp': latest_message.created_at,
-                        'is_from_me': latest_message.sender == request.user
-                    },
-                    'unread_count': unread_count
-                })
-        
-        # Sắp xếp theo thời gian tin nhắn gần nhất
-        conversations.sort(key=lambda x: x['latest_message']['timestamp'], reverse=True)
-        
-        return Response(conversations)
+    serializer_class = ConversationSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        # Truy vấn cuộc trò chuyện gần nhất với mỗi người dùng
+        return Message.objects.raw('''
+            SELECT m.*
+            FROM chat_messages m
+            INNER JOIN (
+                SELECT 
+                    CASE 
+                        WHEN sender_id = %s THEN receiver_id
+                        ELSE sender_id
+                    END as other_user_id,
+                    MAX(timestamp) as max_timestamp
+                FROM chat_messages
+                WHERE sender_id = %s OR receiver_id = %s
+                GROUP BY other_user_id
+            ) latest
+            ON (
+                (m.sender_id = %s AND m.receiver_id = latest.other_user_id) OR
+                (m.receiver_id = %s AND m.sender_id = latest.other_user_id)
+            )
+            AND m.timestamp = latest.max_timestamp
+            ORDER BY m.timestamp DESC
+        ''', [user.id, user.id, user.id, user.id, user.id])
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
 class ConversationDetailView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
@@ -647,183 +619,4 @@ class AdminPendingReportsView(APIView):
         return Response({
             'total_pending': pending_reports.count(),
             'reported_users': result
-        })
-
-class UnreadCountView(APIView):
-    """API để lấy số lượng tin nhắn chưa đọc"""
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request):
-        # Đếm số tin nhắn chưa đọc của người dùng hiện tại
-        unread_count = Message.objects.filter(
-            receiver=request.user,
-            is_read=False
-        ).count()
-        
-        # Đếm số tin nhắn chưa đọc theo từng người gửi
-        unread_by_sender = Message.objects.filter(
-            receiver=request.user,
-            is_read=False
-        ).values('sender').annotate(count=Count('id')).order_by()
-        
-        sender_details = []
-        for item in unread_by_sender:
-            try:
-                sender = User.objects.get(id=item['sender'])
-                sender_details.append({
-                    'sender_id': sender.id,
-                    'sender_username': sender.username,
-                    'count': item['count']
-                })
-            except User.DoesNotExist:
-                pass
-        
-        return Response({
-            'total_unread': unread_count,
-            'unread_by_sender': sender_details
-        })
-
-class MarkReadView(APIView):
-    """API để đánh dấu tin nhắn là đã đọc"""
-    permission_classes = [IsAuthenticated]
-    
-    def post(self, request, username):
-        other_user = get_object_or_404(User, username=username)
-        
-        # Đánh dấu tất cả tin nhắn từ người dùng cụ thể là đã đọc
-        updated_count = Message.objects.filter(
-            sender=other_user,
-            receiver=request.user,
-            is_read=False
-        ).update(is_read=True)
-        
-        return Response({
-            'success': True,
-            'marked_read': updated_count
-        })
-
-class RecentConversationsView(APIView):
-    """API để lấy các cuộc trò chuyện gần đây"""
-    permission_classes = [IsAuthenticated]
-    
-    def get(self, request):
-        # Giới hạn chỉ lấy 5 cuộc trò chuyện gần nhất
-        limit = request.query_params.get('limit', 5)
-        try:
-            limit = int(limit)
-        except ValueError:
-            limit = 5
-        
-        # Lấy thông tin người dùng đã nhắn tin với người dùng hiện tại
-        conversation_users = User.objects.filter(
-            Q(sent_messages__receiver=request.user) | Q(received_messages__sender=request.user)
-        ).distinct()
-        
-        # Lấy tin nhắn gần nhất và số tin nhắn chưa đọc cho mỗi cuộc trò chuyện
-        conversations = []
-        for user in conversation_users:
-            # Lấy tin nhắn gần nhất
-            latest_message = Message.objects.filter(
-                (Q(sender=request.user) & Q(receiver=user)) | 
-                (Q(sender=user) & Q(receiver=request.user))
-            ).order_by('-created_at').first()
-            
-            # Đếm số tin nhắn chưa đọc
-            unread_count = Message.objects.filter(
-                sender=user,
-                receiver=request.user,
-                is_read=False
-            ).count()
-            
-            if latest_message:
-                conversations.append({
-                    'user': {
-                        'id': user.id,
-                        'username': user.username,
-                        'avatar': user.avatar.url if user.avatar else None
-                    },
-                    'latest_message': {
-                        'content': latest_message.content,
-                        'timestamp': latest_message.created_at,
-                        'is_from_me': latest_message.sender == request.user
-                    },
-                    'unread_count': unread_count,
-                    'timestamp': latest_message.created_at  # Để sắp xếp
-                })
-        
-        # Sắp xếp theo thời gian tin nhắn gần nhất
-        conversations.sort(key=lambda x: x['timestamp'], reverse=True)
-        
-        # Giới hạn số lượng
-        conversations = conversations[:limit]
-        
-        # Loại bỏ trường timestamp đã dùng để sắp xếp
-        for conv in conversations:
-            del conv['timestamp']
-        
-        return Response(conversations)
-
-# Admin APIs for chat restrictions
-
-class ChatRestrictionListView(generics.ListCreateAPIView):
-    """API để xem danh sách và tạo mới hạn chế chat (chỉ dành cho admin)"""
-    serializer_class = ChatRestrictionSerializer
-    permission_classes = [IsAdminUser]
-    
-    def get_queryset(self):
-        return ChatRestriction.objects.all().order_by('-created_at')
-
-class ChatRestrictionDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """API để xem chi tiết, cập nhật và xóa hạn chế chat (chỉ dành cho admin)"""
-    serializer_class = ChatRestrictionSerializer
-    permission_classes = [IsAdminUser]
-    queryset = ChatRestriction.objects.all()
-
-class RestrictUserView(APIView):
-    """API để hạn chế người dùng chat (chỉ dành cho admin)"""
-    permission_classes = [IsAdminUser]
-    
-    def post(self, request, user_id):
-        user = get_object_or_404(User, id=user_id)
-        
-        # Lấy thông tin hạn chế từ request
-        restriction_type = request.data.get('restriction_type', 'TEMPORARY')
-        reason = request.data.get('reason', 'Violation of community guidelines')
-        
-        # Tạo thời gian hết hạn nếu là hạn chế tạm thời
-        expires_at = None
-        if restriction_type == 'TEMPORARY':
-            duration_days = request.data.get('duration_days', 7)
-            expires_at = timezone.now() + timezone.timedelta(days=duration_days)
-        
-        # Tạo hạn chế mới
-        restriction = ChatRestriction.objects.create(
-            user=user,
-            restriction_type=restriction_type,
-            reason=reason,
-            expires_at=expires_at,
-            is_active=True,
-            restricted_by=request.user
-        )
-        
-        serializer = ChatRestrictionSerializer(restriction)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-class UnrestrictUserView(APIView):
-    """API để hủy hạn chế người dùng chat (chỉ dành cho admin)"""
-    permission_classes = [IsAdminUser]
-    
-    def post(self, request, user_id):
-        user = get_object_or_404(User, id=user_id)
-        
-        # Hủy tất cả hạn chế đang hoạt động
-        updated = ChatRestriction.objects.filter(user=user, is_active=True).update(
-            is_active=False,
-            unrestricted_by=request.user,
-            unrestricted_at=timezone.now()
-        )
-        
-        return Response({
-            'success': True,
-            'message': f'Removed {updated} active restrictions for user {user.username}'
         })
