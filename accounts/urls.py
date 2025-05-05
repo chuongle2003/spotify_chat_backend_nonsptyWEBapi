@@ -1,7 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from .views import (
-    UserViewSet, 
+    UserViewSet, AdminViewSet,  # Thêm AdminViewSet vào import
     # Sửa lại các imports phù hợp với views.py
     UserSuggestionsView,
     ConnectionRequestView, AcceptConnectionView, 
@@ -19,6 +19,7 @@ from rest_framework_simplejwt.views import (
 # Đăng ký các viewsets với router để tạo URLs tự động
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
+router.register(r'admin/users', AdminViewSet)  # Sửa lại: loại bỏ dấu / và làm rõ đường dẫn
 
 urlpatterns = [
     # Include router URLs
