@@ -87,13 +87,12 @@ class ChatConsumer(AsyncWebsocketConsumer):
 
             if saved_message:
                 if self.channel_layer:
-                    username = self.user.username if self.user else "unknown"
                     await self.channel_layer.group_send(
                         self.room_group_name,
                         {
                             'type': 'chat_message',
                             'message': message,
-                            'username': username,
+                            'username': self.user.username if self.user else "unknown",
                             'timestamp': saved_message.timestamp.isoformat(),
                             'message_id': saved_message.id,
                         }
