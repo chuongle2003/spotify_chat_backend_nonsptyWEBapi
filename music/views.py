@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404, render
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse, Http404, StreamingHttpResponse
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.views import APIView
@@ -32,6 +32,9 @@ import os
 from io import BytesIO
 from django.conf import settings
 import logging
+import mimetypes
+import re
+from wsgiref.util import FileWrapper
 
 User = get_user_model()
 
@@ -123,9 +126,7 @@ class BasicUserFeatures(APIView):
             'trending': reverse('trending'),
             'queue': reverse('queue'),
             'statistics': reverse('user-statistics'),
-            'trends': reverse('personal-trends'),
-            'offline': reverse('offline-downloads'),
-            'download': reverse('offline-download-request')
+            'trends': reverse('personal-trends')
         })
 
 class CreatePlaylistView(APIView):
@@ -1060,29 +1061,10 @@ class UserLibraryView(APIView):
         
         recent_serializer = SongSerializer(recent_songs, many=True)
         
-        # Lấy số lượng bài hát đã tải xuống
-        offline_count = OfflineDownload.objects.filter(
-            user=request.user, 
-            status='COMPLETED',
-            is_active=True
-        ).count()
-        
-        # Lấy không gian đĩa đã sử dụng cho tải xuống offline (đơn vị MB)
-        offline_space = OfflineDownload.objects.filter(
-            user=request.user, 
-            status='COMPLETED',
-            is_active=True
-        ).count() * 5  # Ước tính mỗi bài hát ~5MB
-        
         return Response({
             'playlists': playlist_serializer.data,
             'favorites': favorites_serializer.data,
-            'recent': recent_serializer.data,
-            'offline': {
-                'count': offline_count,
-                'space_used_mb': offline_space,
-                'url': reverse('offline-downloads')
-            }
+            'recent': recent_serializer.data
         })
 
 class TrendingSongsView(APIView):
@@ -2753,3 +2735,111 @@ class FavoriteSongsView(APIView):
         song.save()
         
         return Response({'status': 'success'}, status=status.HTTP_200_OK)
+
+class SongDownloadView(APIView):
+    """API cho phép tải file nhạc trực tiếp từ trình duyệt"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, song_id, format=None):
+        # Lấy bài hát theo ID
+        song = get_object_or_404(Song, id=song_id)
+        
+        # Kiểm tra quyền truy cập
+        if not song.audio_file:
+            return Response({'error': 'File âm thanh không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Lấy đường dẫn file vật lý
+        file_path = song.audio_file.path
+        
+        if not os.path.exists(file_path):
+            return Response({'error': 'File âm thanh không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Xác định MIME type
+        content_type, encoding = mimetypes.guess_type(file_path)
+        if content_type is None:
+            content_type = 'application/octet-stream'
+            
+        # Lấy tên file từ đường dẫn
+        filename = os.path.basename(file_path)
+        
+        # Tạo response với file
+        response = FileResponse(open(file_path, 'rb'), content_type=content_type)
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        # Cập nhật số lượt tải (nếu cần)
+        # song.download_count = F('download_count') + 1
+        # song.save(update_fields=['download_count'])
+        
+        return response
+
+class SongStreamView(APIView):
+    """API phát nhạc trực tuyến với hỗ trợ Range requests"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, song_id, format=None):
+        # Lấy bài hát theo ID
+        song = get_object_or_404(Song, id=song_id)
+        
+        # Kiểm tra quyền truy cập
+        if not song.audio_file:
+            return Response({'error': 'File âm thanh không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Lấy đường dẫn file vật lý
+        file_path = song.audio_file.path
+        
+        if not os.path.exists(file_path):
+            return Response({'error': 'File âm thanh không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+        
+        # Xác định MIME type
+        content_type, encoding = mimetypes.guess_type(file_path)
+        if content_type is None:
+            content_type = 'application/octet-stream'
+        
+        # Lấy kích thước file
+        file_size = os.path.getsize(file_path)
+        
+        # Xử lý Range requests
+        range_header = request.META.get('HTTP_RANGE', '').strip()
+        range_match = re.match(r'bytes=(\d+)-(\d*)', range_header)
+        
+        if range_match:
+            # Xử lý partial content
+            start_byte = int(range_match.group(1))
+            end_byte = int(range_match.group(2)) if range_match.group(2) else file_size - 1
+            
+            if end_byte >= file_size:
+                end_byte = file_size - 1
+            
+            # Tính content length
+            content_length = end_byte - start_byte + 1
+            
+            # Mở file và di chuyển con trỏ
+            file_obj = open(file_path, 'rb')
+            file_obj.seek(start_byte)
+            
+            # Tạo response
+            response = StreamingHttpResponse(
+                FileWrapper(file_obj, 8192),  # Chunk size 8KB
+                status=206,
+                content_type=content_type
+            )
+            
+            # Thêm headers
+            response['Content-Length'] = content_length
+            response['Content-Range'] = f'bytes {start_byte}-{end_byte}/{file_size}'
+            response['Accept-Ranges'] = 'bytes'
+        else:
+            # Phát toàn bộ file
+            file_obj = open(file_path, 'rb')
+            response = StreamingHttpResponse(
+                FileWrapper(file_obj),
+                content_type=content_type
+            )
+            response['Content-Length'] = file_size
+            response['Accept-Ranges'] = 'bytes'
+        
+        # Thống kê
+        # song.play_count = F('play_count') + 1
+        # song.save(update_fields=['play_count'])
+        
+        return response

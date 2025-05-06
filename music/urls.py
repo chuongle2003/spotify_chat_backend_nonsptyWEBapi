@@ -3,8 +3,8 @@ from rest_framework.routers import DefaultRouter
 from . import views
 from django.conf import settings
 from django.conf.urls.static import static
-from .views import (SearchHistoryView, SongRecommendationView, OfflineDownloadListView, 
-                   OfflineDownloadView, DeleteOfflineDownloadView, OfflineDownloadStatusView)
+from .views import (SearchHistoryView, SongRecommendationView,
+                   SongDownloadView, SongStreamView)
 
 
 router = DefaultRouter()
@@ -84,12 +84,6 @@ urlpatterns = [
     path('search-history/delete/', SearchHistoryView.as_view(), name='delete-search-history'),
     path('recommendations/songs/', SongRecommendationView.as_view(), name='song-recommendations'),
     
-    # Tải xuống offline
-    path('offline/downloads/', OfflineDownloadListView.as_view(), name='offline-downloads'),
-    path('offline/download/', OfflineDownloadView.as_view(), name='offline-download-request'),
-    path('offline/downloads/<int:download_id>/', OfflineDownloadStatusView.as_view(), name='offline-download-status'),
-    path('offline/downloads/<int:download_id>/delete/', DeleteOfflineDownloadView.as_view(), name='offline-download-delete'),
-    
     # Admin Collaborative Playlist API 
     path('admin/playlists/collaborative/', views.AdminCollaborativePlaylistListView.as_view(), name='admin-collaborative-playlists'),
     path('admin/playlists/collaborative/<int:pk>/', views.AdminCollaborativePlaylistDetailView.as_view(), name='admin-collaborative-playlist-detail'),
@@ -106,6 +100,10 @@ urlpatterns = [
     path('admin/user-activity/<int:user_id>/', views.AdminUserActivityView.as_view(), name='admin-user-activity-detail'),
     path('admin/reports/top-songs/', views.AdminTopSongsReportView.as_view(), name='admin-top-songs-report'),
     path('admin/reports/top-genres/', views.AdminTopGenresReportView.as_view(), name='admin-top-genres-report'),
+    
+    # Download song
+    path('songs/<int:song_id>/download/', SongDownloadView.as_view(), name='song-download'),
+    path('songs/<int:song_id>/stream/', SongStreamView.as_view(), name='song-stream'),
 ]
 if settings.DEBUG:
       urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

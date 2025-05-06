@@ -83,12 +83,14 @@ class SongSerializer(serializers.ModelSerializer):
     uploaded_by = UserBasicSerializer(read_only=True)
     audio_file = serializers.SerializerMethodField()
     cover_image = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
+    stream_url = serializers.SerializerMethodField()
     
     class Meta:
         model = Song
         fields = ('id', 'title', 'artist', 'album', 'duration', 'audio_file', 
                  'cover_image', 'genre', 'likes_count', 'play_count', 
-                 'uploaded_by', 'created_at', 'release_date')
+                 'uploaded_by', 'created_at', 'release_date', 'download_url', 'stream_url')
                  
     def get_audio_file(self, obj):
         if obj.audio_file:
@@ -108,17 +110,38 @@ class SongSerializer(serializers.ModelSerializer):
             return f"{settings.SITE_URL}{obj.cover_image.url}"
         return None
 
+    def get_download_url(self, obj):
+        if obj.audio_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(f'/api/v1/music/songs/{obj.id}/download/')
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}/api/v1/music/songs/{obj.id}/download/"
+        return None
+
+    def get_stream_url(self, obj):
+        if obj.audio_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(f'/api/v1/music/songs/{obj.id}/stream/')
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}/api/v1/music/songs/{obj.id}/stream/"
+        return None
+
 class SongDetailSerializer(serializers.ModelSerializer):
     uploaded_by = UserBasicSerializer(read_only=True)
     comments_count = serializers.SerializerMethodField()
     audio_file = serializers.SerializerMethodField()
     cover_image = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
+    stream_url = serializers.SerializerMethodField()
     
     class Meta:
         model = Song
         fields = ('id', 'title', 'artist', 'album', 'duration', 'audio_file', 
                  'cover_image', 'genre', 'likes_count', 'play_count', 
-                 'uploaded_by', 'created_at', 'lyrics', 'release_date', 'comments_count')
+                 'uploaded_by', 'created_at', 'lyrics', 'release_date', 'comments_count',
+                 'download_url', 'stream_url')
                  
     def get_comments_count(self, obj):
         return obj.comments.count()
@@ -139,6 +162,24 @@ class SongDetailSerializer(serializers.ModelSerializer):
                 return request.build_absolute_uri(obj.cover_image.url)
             # Nếu không có request, sử dụng SITE_URL từ settings
             return f"{settings.SITE_URL}{obj.cover_image.url}"
+        return None
+
+    def get_download_url(self, obj):
+        if obj.audio_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(f'/api/v1/music/songs/{obj.id}/download/')
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}/api/v1/music/songs/{obj.id}/download/"
+        return None
+
+    def get_stream_url(self, obj):
+        if obj.audio_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(f'/api/v1/music/songs/{obj.id}/stream/')
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}/api/v1/music/songs/{obj.id}/stream/"
         return None
 
 class PlaylistSerializer(serializers.ModelSerializer):
