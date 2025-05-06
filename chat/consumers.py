@@ -72,15 +72,16 @@ class ChatConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         data = json.loads(text_data)
         message = data['message']
-        username = data['username']
-        room = data.get('room', self.room_name)
-
+        
         # Đảm bảo user đã được khởi tạo đúng
         if self.user is None:
             await self.send(text_data=json.dumps({
                 'error': 'Lỗi xác thực người dùng, vui lòng kết nối lại'
             }))
             return
+            
+        username = self.user.username
+        room = data.get('room', self.room_name)
 
         # Lưu tin nhắn vào cơ sở dữ liệu
         await self.save_message(username, room, message)
