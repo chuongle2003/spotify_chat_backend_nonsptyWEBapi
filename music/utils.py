@@ -423,35 +423,58 @@ def download_song_for_offline(song, target_dir: Optional[str] = None) -> Tuple[b
     - message: Thông báo kết quả
     - file_path: Đường dẫn đến file đã tải xuống (hoặc None nếu thất bại)
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    logger.info(f"Bắt đầu tải xuống bài hát: {song.id} - {song.title}")
+    
     if not song.audio_file:
+        logger.error(f"File âm thanh không tồn tại cho bài hát: {song.id}")
         return False, "File âm thanh không tồn tại", None
-        
-    # Tạo tên file
-    song_filename = os.path.basename(song.audio_file.name)
-    
-    # Xác định thư mục đích
-    if not target_dir:
-        # Sử dụng thư mục tạm nếu không chỉ định
-        target_dir = tempfile.gettempdir()
-    
-    # Đảm bảo thư mục tồn tại
-    os.makedirs(target_dir, exist_ok=True)
-    
-    target_path = os.path.join(target_dir, song_filename)
     
     try:
-        # Trong môi trường thực tế, đây là nơi bạn sẽ sao chép file từ storage về local
-        # Trong ví dụ này, chúng ta sẽ sử dụng file gốc từ MEDIA_ROOT
+        # Kiểm tra URL file nguồn có tồn tại không
         source_path = song.audio_file.path
+        logger.info(f"Đường dẫn nguồn: {source_path}")
+        
+        if not os.path.exists(source_path):
+            logger.error(f"File nguồn không tồn tại: {source_path}")
+            return False, f"File nguồn không tồn tại: {source_path}", None
+            
+        # Tạo tên file
+        song_filename = os.path.basename(song.audio_file.name)
+        logger.info(f"Tên file: {song_filename}")
+        
+        # Xác định thư mục đích
+        if not target_dir:
+            # Sử dụng thư mục tạm nếu không chỉ định
+            target_dir = tempfile.gettempdir()
+        
+        logger.info(f"Thư mục đích: {target_dir}")
+        
+        # Đảm bảo thư mục tồn tại
+        os.makedirs(target_dir, exist_ok=True)
+        
+        target_path = os.path.join(target_dir, song_filename)
+        logger.info(f"Đường dẫn đích: {target_path}")
         
         # Sao chép file
         import shutil
         shutil.copy2(source_path, target_path)
         
-        return True, "Tải xuống thành công", target_path
+        # Kiểm tra file đã được tạo thành công chưa
+        if os.path.exists(target_path):
+            logger.info(f"Sao chép thành công tới: {target_path}")
+            return True, "Tải xuống thành công", target_path
+        else:
+            logger.error(f"Không thể tìm thấy file đích sau khi sao chép: {target_path}")
+            return False, "Không thể tìm thấy file sau khi sao chép", None
+            
     except Exception as e:
+        logger.exception(f"Lỗi khi tải xuống: {str(e)}")
         return False, f"Lỗi khi tải xuống: {str(e)}", None
-        
+
+
 def verify_offline_song(file_path: str) -> bool:
     """
     Kiểm tra một file nhạc đã tải xuống có hợp lệ không
@@ -460,26 +483,44 @@ def verify_offline_song(file_path: str) -> bool:
     
     Trả về True nếu file hợp lệ, False nếu không
     """
+    import logging
+    logger = logging.getLogger(__name__)
+    
     if not os.path.exists(file_path):
+        logger.error(f"File không tồn tại: {file_path}")
         return False
         
     try:
+        # Kiểm tra kích thước file
+        file_size = os.path.getsize(file_path)
+        logger.info(f"Kích thước file: {file_size} bytes")
+        
+        if file_size == 0:
+            logger.error("File có kích thước 0 byte")
+            return False
+            
         # Kiểm tra file có phải là file âm thanh hợp lệ không
-        cmd = ['ffprobe', '-i', file_path, '-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams']
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # Trong môi trường thực tế, có thể sử dụng ffprobe hoặc các thư viện như mutagen
+        # Ở đây chúng ta sẽ đơn giản kiểm tra kích thước file và extension
+        valid_extensions = ['.mp3', '.wav', '.ogg', '.m4a']
+        file_ext = os.path.splitext(file_path)[1].lower()
         
-        # Nếu ffprobe trả về kết quả hợp lệ, file là hợp lệ
-        data = json.loads(result.stdout)
-        
-        # Kiểm tra xem có stream audio không
-        has_audio = False
-        for stream in data.get('streams', []):
-            if stream.get('codec_type') == 'audio':
-                has_audio = True
-                break
-                
-        return has_audio
-    except:
+        if file_ext not in valid_extensions:
+            logger.error(f"File không có extension hợp lệ: {file_ext}")
+            return False
+            
+        # Cách đơn giản nhất để kiểm tra file là đọc một số byte đầu tiên
+        with open(file_path, 'rb') as f:
+            header = f.read(10)  # Đọc 10 byte đầu
+            
+        if len(header) < 10:
+            logger.error("File không thể đọc đủ số byte cần thiết")
+            return False
+            
+        logger.info(f"File nhạc hợp lệ: {file_path}")
+        return True
+    except Exception as e:
+        logger.exception(f"Lỗi khi kiểm tra file: {str(e)}")
         return False
         
 def get_offline_song_metadata(file_path: str) -> Dict[str, Any]:

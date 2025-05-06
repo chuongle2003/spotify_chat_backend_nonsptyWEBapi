@@ -31,6 +31,7 @@ from .utils import get_audio_metadata, convert_audio_format, extract_synchronize
 import os
 from io import BytesIO
 from django.conf import settings
+import logging
 
 User = get_user_model()
 
@@ -2614,6 +2615,9 @@ class OfflineDownloadView(APIView):
         
     def _process_download(self, download):
         """Xử lý tải xuống (trong thực tế nên được xử lý bởi một task background)"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         try:
             # Cập nhật trạng thái
             download.status = 'DOWNLOADING'
@@ -2622,32 +2626,42 @@ class OfflineDownloadView(APIView):
             
             # Tạo thư mục lưu trữ cục bộ
             target_dir = os.path.join(settings.MEDIA_ROOT, f'offline/{download.user.id}')
+            if not os.path.exists(target_dir):
+                logger.info(f"Tạo thư mục lưu trữ cục bộ: {target_dir}")
+                os.makedirs(target_dir, exist_ok=True)
+                
+            logger.info(f"Bắt đầu tải xuống bài hát ID: {download.song.id} - {download.song.title}")
             
             # Tải xuống bài hát sử dụng utility function
             success, message, file_path = download_song_for_offline(download.song, target_dir)
+            logger.info(f"Kết quả tải xuống: success={success}, message={message}, file_path={file_path}")
             
             # Cập nhật trạng thái
             if success and file_path:
                 # Kiểm tra file tải xuống có hợp lệ không
-                if verify_offline_song(file_path):
+                if os.path.exists(file_path) and verify_offline_song(file_path):
                     download.status = 'COMPLETED'
                     download.progress = 100
                     download.local_path = file_path
+                    logger.info(f"Tải xuống hoàn tất: {file_path}")
                 else:
                     download.status = 'FAILED'
                     download.progress = 0
                     download.local_path = None
+                    logger.error(f"File tải xuống không hợp lệ hoặc không tồn tại: {file_path}")
             else:
                 download.status = 'FAILED'
                 download.progress = 0
+                logger.error(f"Tải xuống thất bại: {message}")
                 
             download.save()
             
         except Exception as e:
             download.status = 'FAILED'
             download.save()
+            logger.exception(f"Lỗi khi tải xuống bài hát ID {download.song.id}: {str(e)}")
             print(f"Lỗi khi tải xuống: {str(e)}")
-            
+    
 class DeleteOfflineDownloadView(APIView):
     """API để xóa bài hát đã tải xuống offline"""
     permission_classes = [IsAuthenticated]
