@@ -70,6 +70,9 @@ urlpatterns = [
     path('recommendations/liked/', views.LikedBasedRecommendationsView.as_view(), name='liked-recommendations'),
     path('recommendations/may-like/', views.YouMayLikeView.as_view(), name='may-like'),
     
+    # Danh sách yêu thích
+    path('favorites/', views.FavoriteSongsView.as_view(), name='favorite-songs'),
+    
     # Lịch sử
     path('history/', views.PlayHistoryView.as_view(), name='play-history'),
     path('history/search/', views.SearchHistoryView.as_view(), name='search-history'),

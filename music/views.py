@@ -8,7 +8,7 @@ from rest_framework import status, permissions, viewsets, generics, filters
 from .models import (
     Playlist, Song, Album, Genre, Rating, Comment, SongPlayHistory, 
     SearchHistory, Artist, Queue, QueueItem, UserStatus, LyricLine, Message, UserRecommendation,
-    CollaboratorRole, PlaylistEditHistory, OfflineDownload
+    CollaboratorRole, PlaylistEditHistory, OfflineDownload, UserActivity
 )
 from .serializers import (
     PlaylistSerializer, SongSerializer, AlbumSerializer, GenreSerializer, 
@@ -2693,3 +2693,63 @@ class OfflineDownloadStatusView(APIView):
             
         serializer = OfflineDownloadSerializer(download)
         return Response(serializer.data)
+
+class FavoriteSongsView(APIView):
+    """Quản lý danh sách bài hát yêu thích"""
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, format=None):
+        """Lấy danh sách bài hát yêu thích của người dùng"""
+        user = request.user
+        favorite_songs = user.favorite_songs.all()
+        serializer = SongSerializer(favorite_songs, many=True)
+        return Response(serializer.data)
+    
+    def post(self, request, format=None):
+        """Thêm bài hát vào danh sách yêu thích"""
+        song_id = request.data.get('song_id')
+        if not song_id:
+            return Response({'error': 'Thiếu song_id'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            song = Song.objects.get(id=song_id)
+        except Song.DoesNotExist:
+            return Response({'error': 'Bài hát không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+            
+        user = request.user
+        if song in user.favorite_songs.all():
+            return Response({'error': 'Bài hát đã có trong danh sách yêu thích'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user.favorite_songs.add(song)
+        song.likes_count += 1
+        song.save()
+        
+        # Lưu hoạt động yêu thích
+        UserActivity.objects.create(
+            user=user,
+            activity_type='LIKE',
+            song=song
+        )
+        
+        return Response({'status': 'success'}, status=status.HTTP_201_CREATED)
+    
+    def delete(self, request, format=None):
+        """Xóa bài hát khỏi danh sách yêu thích"""
+        song_id = request.data.get('song_id')
+        if not song_id:
+            return Response({'error': 'Thiếu song_id'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            song = Song.objects.get(id=song_id)
+        except Song.DoesNotExist:
+            return Response({'error': 'Bài hát không tồn tại'}, status=status.HTTP_404_NOT_FOUND)
+            
+        user = request.user
+        if song not in user.favorite_songs.all():
+            return Response({'error': 'Bài hát không có trong danh sách yêu thích'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        user.favorite_songs.remove(song)
+        song.likes_count = max(0, song.likes_count - 1)
+        song.save()
+        
+        return Response({'status': 'success'}, status=status.HTTP_200_OK)
