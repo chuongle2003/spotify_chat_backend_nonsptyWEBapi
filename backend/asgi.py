@@ -57,9 +57,8 @@ class JwtAuthMiddleware(BaseMiddleware):
 # Tránh import ngay từ đầu để ngăn circular imports
 def get_websocket_urlpatterns():
     from chat.routing import websocket_urlpatterns as chat_websocket_urlpatterns
-    from ai_assistant.routing import websocket_urlpatterns as ai_websocket_urlpatterns
-    # Kết hợp các patterns từ các ứng dụng khác nhau
-    return chat_websocket_urlpatterns + ai_websocket_urlpatterns
+    # Chỉ sử dụng websocket patterns từ chat app
+    return chat_websocket_urlpatterns
 
 # Tạo ứng dụng ASGI
 application = ProtocolTypeRouter({

@@ -47,6 +47,7 @@ api_v1_patterns = [
     path('accounts/', include('accounts.urls')),
     path('music/', include('music.urls')),
     path('chat/', include('chat.urls')),
+    path('ai/', include('ai_assistant.urls')),
 ]
 
 urlpatterns = [
