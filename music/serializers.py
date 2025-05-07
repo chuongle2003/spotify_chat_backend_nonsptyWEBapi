@@ -63,9 +63,31 @@ class UserBasicSerializer(serializers.ModelSerializer):
 
 class ArtistSerializer(serializers.ModelSerializer):
     """Serializer for Artist model"""
+    image = serializers.SerializerMethodField()
+    
     class Meta:
         model = Artist
         fields = ('id', 'name', 'bio', 'image')
+        
+    def get_image(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            # Nếu không có request, sử dụng SITE_URL từ settings
+            return f"{settings.SITE_URL}{obj.image.url}"
+        return None
+
+class ArtistDetailSerializer(serializers.ModelSerializer):
+    """Serializer for Artist model with full detail and write operations"""
+    songs_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Artist
+        fields = ('id', 'name', 'bio', 'image', 'songs_count')
+        
+    def get_songs_count(self, obj):
+        return Song.objects.filter(artist=obj.name).count()
 
 class GenreBasicSerializer(serializers.ModelSerializer):
     """Basic serializer for Genre model"""

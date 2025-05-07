@@ -5,6 +5,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status, permissions, viewsets, generics, filters
+from rest_framework.pagination import PageNumberPagination
 from .models import (
     Playlist, Song, Album, Genre, Rating, Comment, SongPlayHistory, 
     SearchHistory, Artist, Queue, QueueItem, UserStatus, LyricLine, Message, UserRecommendation,
@@ -17,7 +18,7 @@ from .serializers import (
     AlbumDetailSerializer, GenreDetailSerializer, ArtistSerializer,
     QueueSerializer, UserStatusSerializer, LyricLineSerializer, MessageSerializer,
     UserBasicSerializer, CollaboratorRoleSerializer, CollaboratorRoleCreateSerializer,
-    PlaylistEditHistorySerializer, OfflineDownloadSerializer
+    PlaylistEditHistorySerializer, OfflineDownloadSerializer, ArtistDetailSerializer
 )
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -35,6 +36,7 @@ import logging
 import mimetypes
 import re
 from wsgiref.util import FileWrapper
+from django_filters import rest_framework as DjangoFilterBackend
 
 User = get_user_model()
 
@@ -2737,7 +2739,7 @@ class FavoriteSongsView(APIView):
         return Response({'status': 'success'}, status=status.HTTP_200_OK)
 
 class SongDownloadView(APIView):
-    """API cho phép tải file nhạc trực tiếp từ trình duyệt"""
+    """API cho phép tải file nhạc trực tiếp từ trình duyệt với hỗ trợ Range requests và streaming"""
     permission_classes = [permissions.IsAuthenticated]
     
     def get(self, request, song_id, format=None):
@@ -2757,14 +2759,73 @@ class SongDownloadView(APIView):
         # Xác định MIME type
         content_type, encoding = mimetypes.guess_type(file_path)
         if content_type is None:
-            content_type = 'application/octet-stream'
+            content_type = 'audio/mpeg'  # Mặc định cho file MP3
             
-        # Lấy tên file từ đường dẫn
+        # Lấy tên file từ đường dẫn và thông tin kích thước
         filename = os.path.basename(file_path)
+        file_size = os.path.getsize(file_path)
         
-        # Tạo response với file
-        response = FileResponse(open(file_path, 'rb'), content_type=content_type)
+        # Xử lý Range requests
+        range_header = request.META.get('HTTP_RANGE', '').strip()
+        range_match = re.match(r'bytes=(\d+)-(\d*)', range_header)
+        
+        if range_match:
+            # Xử lý partial content nếu có Range header
+            start_byte = int(range_match.group(1))
+            end_byte = int(range_match.group(2)) if range_match.group(2) else file_size - 1
+            
+            if end_byte >= file_size:
+                end_byte = file_size - 1
+            
+            # Tính content length
+            content_length = end_byte - start_byte + 1
+            
+            # Tạo generator để stream file
+            def file_iterator_partial(file_path, start, length, chunk_size=8192):
+                with open(file_path, 'rb') as f:
+                    f.seek(start)
+                    bytes_read = 0
+                    while bytes_read < length:
+                        bytes_to_read = min(chunk_size, length - bytes_read)
+                        data = f.read(bytes_to_read)
+                        if not data:
+                            break
+                        bytes_read += len(data)
+                        yield data
+            
+            # Tạo response
+            response = StreamingHttpResponse(
+                file_iterator_partial(file_path, start_byte, content_length),
+                status=206,
+                content_type=content_type
+            )
+            
+            # Thêm headers cho Partial Content
+            response['Content-Length'] = content_length
+            response['Content-Range'] = f'bytes {start_byte}-{end_byte}/{file_size}'
+        else:
+            # Tạo generator để stream toàn bộ file
+            def file_iterator_full(file_path, chunk_size=8192):
+                with open(file_path, 'rb') as f:
+                    while True:
+                        chunk = f.read(chunk_size)
+                        if not chunk:
+                            break
+                        yield chunk
+            
+            # Stream toàn bộ file
+            response = StreamingHttpResponse(
+                file_iterator_full(file_path),
+                content_type=content_type
+            )
+            response['Content-Length'] = file_size
+        
+        # Thêm các headers bắt buộc
+        response['Accept-Ranges'] = 'bytes'
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        # Thêm cache headers để cải thiện hiệu suất
+        response['Cache-Control'] = 'public, max-age=86400'  # Cache 1 ngày
         
         # Cập nhật số lượt tải (nếu cần)
         # song.download_count = F('download_count') + 1
@@ -2843,3 +2904,430 @@ class SongStreamView(APIView):
         # song.save(update_fields=['play_count'])
         
         return response
+
+# Admin API ViewSets
+class AdminSongViewSet(viewsets.ModelViewSet):
+    """ViewSet để quản lý bài hát dành riêng cho admin"""
+    queryset = Song.objects.all().order_by('-created_at')
+    serializer_class = SongSerializer
+    permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
+    search_fields = ['title', 'artist', 'album', 'genre']
+    ordering_fields = ['title', 'artist', 'created_at', 'play_count', 'likes_count', 'release_date']
+    filterset_fields = ['artist', 'genre', 'album']
+    
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return SongDetailSerializer
+        return SongSerializer
+    
+    @action(detail=True, methods=['post'])
+    def approve(self, request, pk=None):
+        """Phê duyệt bài hát (nếu cần workflow phê duyệt)"""
+        song = self.get_object()
+        song.is_approved = True
+        song.save()
+        return Response({'status': 'Song approved'})
+    
+    @action(detail=True, methods=['post'])
+    def reject(self, request, pk=None):
+        """Từ chối bài hát"""
+        song = self.get_object()
+        song.is_approved = False
+        song.save()
+        return Response({'status': 'Song rejected'})
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Thống kê bài hát: tổng số, số lượt nghe, thể loại phổ biến nhất"""
+        total_songs = Song.objects.count()
+        total_plays = Song.objects.aggregate(total=Sum('play_count'))['total'] or 0
+        total_likes = Song.objects.aggregate(total=Sum('likes_count'))['total'] or 0
+        
+        # Thể loại phổ biến nhất
+        genre_counts = {}
+        for song in Song.objects.all():
+            if song.genre:
+                genre_counts[song.genre] = genre_counts.get(song.genre, 0) + 1
+        
+        popular_genres = sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        return Response({
+            'total_songs': total_songs,
+            'total_plays': total_plays,
+            'total_likes': total_likes,
+            'popular_genres': [{'name': genre, 'count': count} for genre, count in popular_genres]
+        })
+
+class AdminArtistViewSet(viewsets.ModelViewSet):
+    """ViewSet để quản lý nghệ sĩ dành riêng cho admin"""
+    queryset = Artist.objects.all()
+    serializer_class = ArtistSerializer
+    permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
+    search_fields = ['name', 'bio']
+    ordering_fields = ['name', 'id']
+    
+    def get_serializer_class(self):
+        """Trả về serializer tương ứng với action"""
+        if self.action in ['create', 'update', 'partial_update']:
+            return ArtistDetailSerializer
+        return ArtistSerializer
+    
+    @action(detail=True, methods=['get'])
+    def songs(self, request, pk=None):
+        """Lấy danh sách bài hát của nghệ sĩ"""
+        artist = self.get_object()
+        songs = Song.objects.filter(artist=artist.name)
+        serializer = SongSerializer(songs, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def upload_image(self, request, pk=None):
+        """Upload avatar cho nghệ sĩ"""
+        artist = self.get_object()
+        
+        if 'image' not in request.FILES:
+            return Response(
+                {'error': 'Không có file hình ảnh được cung cấp'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        artist.image = request.FILES['image']
+        artist.save()
+        
+        return Response({'status': 'Đã tải lên hình ảnh thành công'})
+        
+    @action(detail=True, methods=['post'])
+    def update_bio(self, request, pk=None):
+        """Cập nhật tiểu sử nghệ sĩ"""
+        artist = self.get_object()
+        
+        if 'bio' not in request.data:
+            return Response(
+                {'error': 'Tiểu sử nghệ sĩ không được cung cấp'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        artist.bio = request.data['bio']
+        artist.save()
+        
+        return Response({'status': 'Đã cập nhật tiểu sử thành công'})
+
+class AdminAlbumViewSet(viewsets.ModelViewSet):
+    """ViewSet để quản lý album dành riêng cho admin"""
+    queryset = Album.objects.all().order_by('-release_date')
+    serializer_class = AlbumSerializer
+    permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
+    search_fields = ['title', 'artist', 'description']
+    ordering_fields = ['title', 'artist', 'release_date', 'created_at']
+    filterset_fields = ['artist']
+    
+    def get_serializer_class(self):
+        if self.action in ['retrieve', 'create', 'update', 'partial_update']:
+            return AlbumDetailSerializer
+        return AlbumSerializer
+    
+    @action(detail=True, methods=['get'])
+    def songs(self, request, pk=None):
+        """Lấy danh sách bài hát trong album"""
+        album = self.get_object()
+        songs = Song.objects.filter(album=album.title)
+        
+        page = self.paginate_queryset(songs)
+        if page is not None:
+            serializer = SongSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+            
+        serializer = SongSerializer(songs, many=True, context={'request': request})
+        return Response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def add_song(self, request, pk=None):
+        """Thêm bài hát vào album"""
+        album = self.get_object()
+        song_id = request.data.get('song_id')
+        
+        if not song_id:
+            return Response(
+                {'error': 'Cần cung cấp song_id'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            song = Song.objects.get(id=song_id)
+            song.album = album.title
+            song.save()
+            return Response({'status': f'Đã thêm bài hát "{song.title}" vào album'})
+        except Song.DoesNotExist:
+            return Response(
+                {'error': 'Không tìm thấy bài hát'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=True, methods=['post'])
+    def remove_song(self, request, pk=None):
+        """Xóa bài hát khỏi album"""
+        album = self.get_object()
+        song_id = request.data.get('song_id')
+        
+        if not song_id:
+            return Response(
+                {'error': 'Cần cung cấp song_id'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            song = Song.objects.get(id=song_id)
+            song.album = album.title
+            song.save()
+            return Response({'status': f'Đã xóa bài hát "{song.title}" khỏi album'})
+        except Song.DoesNotExist:
+            return Response(
+                {'error': 'Không tìm thấy bài hát'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+class AdminGenreViewSet(viewsets.ModelViewSet):
+    """ViewSet để quản lý thể loại dành riêng cho admin"""
+    queryset = Genre.objects.all()
+    serializer_class = GenreSerializer
+    permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
+    search_fields = ['name', 'description']
+    ordering_fields = ['name', 'id']
+    
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return GenreDetailSerializer
+        return GenreSerializer
+    
+    @action(detail=True, methods=['get'])
+    def songs(self, request, pk=None):
+        """Lấy danh sách bài hát thuộc thể loại"""
+        genre = self.get_object()
+        songs = Song.objects.filter(genre=genre.name)
+        
+        # Phân trang
+        paginator = PageNumberPagination()
+        paginator.page_size = 20
+        result_page = paginator.paginate_queryset(songs, request)
+        serializer = SongSerializer(result_page, many=True, context={'request': request})
+        
+        return paginator.get_paginated_response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def upload_image(self, request, pk=None):
+        """Upload ảnh cho thể loại"""
+        genre = self.get_object()
+        
+        if 'image' not in request.FILES:
+            return Response(
+                {'error': 'Không có file hình ảnh được cung cấp'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        genre.image = request.FILES['image']
+        genre.save()
+        
+        return Response({'status': 'Đã tải lên hình ảnh thành công'})
+    
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """Thống kê theo thể loại: số lượng bài hát, lượt nghe, số nghệ sĩ"""
+        genres = Genre.objects.all()
+        result = []
+        
+        for genre in genres:
+            songs = Song.objects.filter(genre=genre.name)
+            songs_count = songs.count()
+            
+            # Số lượt nghe
+            play_count = songs.aggregate(total=Sum('play_count'))['total'] or 0
+            
+            # Số nghệ sĩ
+            artists = set()
+            for song in songs:
+                artists.add(song.artist)
+            
+            result.append({
+                'id': genre.id,
+                'name': genre.name,
+                'songs_count': songs_count,
+                'play_count': play_count,
+                'artists_count': len(artists)
+            })
+        
+        return Response(result)
+
+class AdminPlaylistViewSet(viewsets.ModelViewSet):
+    """ViewSet để quản lý tất cả playlist dành riêng cho admin"""
+    queryset = Playlist.objects.all().order_by('-created_at')
+    serializer_class = PlaylistSerializer
+    permission_classes = [IsAdminUser]
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
+    search_fields = ['name', 'description', 'user__username']
+    ordering_fields = ['name', 'created_at', 'updated_at']
+    filterset_fields = ['user', 'is_public', 'is_collaborative']
+    
+    def get_serializer_class(self):
+        if self.action in ['retrieve', 'create', 'update', 'partial_update']:
+            return PlaylistDetailSerializer
+        return PlaylistSerializer
+    
+    @action(detail=True, methods=['get'])
+    def songs(self, request, pk=None):
+        """Lấy danh sách bài hát trong playlist"""
+        playlist = self.get_object()
+        songs = playlist.songs.all()
+        
+        paginator = PageNumberPagination()
+        paginator.page_size = 20
+        result_page = paginator.paginate_queryset(songs, request)
+        serializer = SongSerializer(result_page, many=True, context={'request': request})
+        
+        return paginator.get_paginated_response(serializer.data)
+    
+    @action(detail=True, methods=['post'])
+    def add_song(self, request, pk=None):
+        """Thêm bài hát vào playlist"""
+        playlist = self.get_object()
+        song_id = request.data.get('song_id')
+        
+        if not song_id:
+            return Response(
+                {'error': 'Cần cung cấp song_id'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            song = Song.objects.get(id=song_id)
+            playlist.songs.add(song)
+            
+            # Ghi log hành động
+            PlaylistEditHistory.log_action(
+                playlist=playlist,
+                user=request.user,
+                action='ADD_SONG',
+                details={'admin_action': True},
+                related_song=song
+            )
+            
+            return Response({'status': f'Đã thêm bài hát "{song.title}" vào playlist'})
+        except Song.DoesNotExist:
+            return Response(
+                {'error': 'Không tìm thấy bài hát'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=True, methods=['post'])
+    def remove_song(self, request, pk=None):
+        """Xóa bài hát khỏi playlist"""
+        playlist = self.get_object()
+        song_id = request.data.get('song_id')
+        
+        if not song_id:
+            return Response(
+                {'error': 'Cần cung cấp song_id'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            song = Song.objects.get(id=song_id)
+            if song in playlist.songs.all():
+                playlist.songs.remove(song)
+                
+                # Ghi log hành động
+                PlaylistEditHistory.log_action(
+                    playlist=playlist,
+                    user=request.user,
+                    action='REMOVE_SONG',
+                    details={'admin_action': True},
+                    related_song=song
+                )
+                
+                return Response({'status': f'Đã xóa bài hát "{song.title}" khỏi playlist'})
+            else:
+                return Response(
+                    {'error': 'Bài hát không nằm trong playlist'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Song.DoesNotExist:
+            return Response(
+                {'error': 'Không tìm thấy bài hát'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=True, methods=['post'])
+    def upload_cover(self, request, pk=None):
+        """Upload ảnh bìa cho playlist"""
+        playlist = self.get_object()
+        
+        if 'cover_image' not in request.FILES:
+            return Response(
+                {'error': 'Không có file hình ảnh được cung cấp'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Lưu lại thông tin cũ để ghi vào lịch sử
+        old_cover = playlist.cover_image
+        
+        playlist.cover_image = request.FILES['cover_image']
+        playlist.save()
+        
+        # Ghi log hành động
+        PlaylistEditHistory.log_action(
+            playlist=playlist,
+            user=request.user,
+            action='UPDATE_INFO',
+            details={
+                'old': {'cover_image': str(old_cover) if old_cover else None},
+                'new': {'cover_image': str(playlist.cover_image)},
+                'admin_action': True
+            }
+        )
+        
+        return Response({'status': 'Đã tải lên hình ảnh bìa thành công'})
+    
+    @action(detail=True, methods=['post'])
+    def toggle_privacy(self, request, pk=None):
+        """Chuyển đổi trạng thái công khai/riêng tư của playlist"""
+        playlist = self.get_object()
+        playlist.is_public = not playlist.is_public
+        playlist.save()
+        
+        # Ghi log hành động
+        PlaylistEditHistory.log_action(
+            playlist=playlist,
+            user=request.user,
+            action='UPDATE_INFO',
+            details={
+                'old': {'is_public': not playlist.is_public},
+                'new': {'is_public': playlist.is_public},
+                'admin_action': True
+            }
+        )
+        
+        return Response({'status': f'Playlist đã được chuyển sang chế độ {"công khai" if playlist.is_public else "riêng tư"}'})
+    
+    @action(detail=True, methods=['post'])
+    def toggle_collaborative(self, request, pk=None):
+        """Chuyển đổi trạng thái playlist cộng tác"""
+        playlist = self.get_object()
+        playlist.is_collaborative = not playlist.is_collaborative
+        playlist.save()
+        
+        # Ghi log hành động
+        PlaylistEditHistory.log_action(
+            playlist=playlist,
+            user=request.user,
+            action='UPDATE_INFO',
+            details={
+                'old': {'is_collaborative': not playlist.is_collaborative},
+                'new': {'is_collaborative': playlist.is_collaborative},
+                'admin_action': True
+            }
+        )
+        
+        return Response({'status': f'Playlist đã được chuyển sang {"cho phép" if playlist.is_collaborative else "không cho phép"} cộng tác'})

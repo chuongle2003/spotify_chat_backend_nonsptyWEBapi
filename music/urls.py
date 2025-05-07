@@ -16,8 +16,19 @@ router.register(r'comments', views.CommentViewSet)
 router.register(r'ratings', views.RatingViewSet)
 router.register(r'artists', views.ArtistViewSet)
 
+# Admin router
+admin_router = DefaultRouter()
+admin_router.register(r'songs', views.AdminSongViewSet)
+admin_router.register(r'artists', views.AdminArtistViewSet)
+admin_router.register(r'albums', views.AdminAlbumViewSet)
+admin_router.register(r'genres', views.AdminGenreViewSet)
+admin_router.register(r'playlists', views.AdminPlaylistViewSet)
+
 urlpatterns = [
     path('', include(router.urls)),
+    
+    # Admin API
+    path('admin/', include(admin_router.urls)),
     
     # Trang chủ và khám phá nhạc
     path('home/', views.HomePageView.as_view(), name='home'),

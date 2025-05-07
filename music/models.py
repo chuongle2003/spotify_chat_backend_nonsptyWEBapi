@@ -18,6 +18,7 @@ class Song(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     lyrics = models.TextField(blank=True)
     release_date = models.DateField(null=True, blank=True)
+    is_approved = models.BooleanField(default=True, help_text="Đánh dấu bài hát đã được phê duyệt")
     
     class Meta:
         db_table = 'songs'
