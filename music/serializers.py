@@ -594,3 +594,105 @@ class OfflineDownloadSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         validated_data['user'] = user
         return super().create(validated_data) 
+
+class SongAdminSerializer(serializers.ModelSerializer):
+    """Serializer chuyên biệt cho admin quản lý bài hát"""
+    uploaded_by = UserBasicSerializer(read_only=True)
+    uploaded_by_id = serializers.IntegerField(write_only=True, required=False)
+    audio_file = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
+    stream_url = serializers.SerializerMethodField()
+    comments_count = serializers.SerializerMethodField()
+    album_info = serializers.SerializerMethodField()
+    genre_info = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Song
+        fields = ('id', 'title', 'artist', 'album', 'album_info', 'genre', 'genre_info',
+                 'duration', 'audio_file', 'cover_image', 'lyrics', 'release_date',
+                 'likes_count', 'play_count', 'comments_count', 'is_approved',
+                 'uploaded_by', 'uploaded_by_id', 'created_at', 'download_url', 'stream_url')
+                 
+    def get_audio_file(self, obj):
+        if obj and obj.audio_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.audio_file.url)
+            return f"{settings.SITE_URL}{obj.audio_file.url}"
+        return None
+        
+    def get_cover_image(self, obj):
+        if obj and obj.cover_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_image.url)
+            return f"{settings.SITE_URL}{obj.cover_image.url}"
+        return None
+        
+    def get_download_url(self, obj):
+        if obj and obj.audio_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(f'/api/v1/music/songs/{obj.id}/download/')
+            return f"{settings.SITE_URL}/api/v1/music/songs/{obj.id}/download/"
+        return None
+        
+    def get_stream_url(self, obj):
+        if obj and obj.audio_file:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(f'/api/v1/music/songs/{obj.id}/stream/')
+            return f"{settings.SITE_URL}/api/v1/music/songs/{obj.id}/stream/"
+        return None
+        
+    def get_comments_count(self, obj):
+        if obj:
+            return obj.comments.count()
+        return 0
+        
+    def get_album_info(self, obj):
+        """Trả về thông tin album nếu có"""
+        if obj and obj.album:
+            try:
+                album = Album.objects.filter(title=obj.album).first()
+                if album:
+                    return {
+                        'id': album.id,
+                        'title': album.title,
+                        'artist': album.artist
+                    }
+            except:
+                pass
+        return None
+        
+    def get_genre_info(self, obj):
+        """Trả về thông tin thể loại nếu có"""
+        if obj and obj.genre:
+            try:
+                genre = Genre.objects.filter(name=obj.genre).first()
+                if genre:
+                    return {
+                        'id': genre.id,
+                        'name': genre.name
+                    }
+            except:
+                pass
+        return None
+        
+    def update(self, instance, validated_data):
+        """Hỗ trợ cập nhật bài hát với xử lý an toàn cho các trường"""
+        for attr, value in validated_data.items():
+            if attr != 'uploaded_by_id':
+                setattr(instance, attr, value)
+        
+        # Xử lý uploaded_by_id nếu được cung cấp
+        if 'uploaded_by_id' in validated_data:
+            try:
+                user = User.objects.get(id=validated_data['uploaded_by_id'])
+                instance.uploaded_by = user
+            except User.DoesNotExist:
+                pass
+                
+        instance.save()
+        return instance 

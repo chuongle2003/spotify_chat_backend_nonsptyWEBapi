@@ -18,7 +18,8 @@ from .serializers import (
     AlbumDetailSerializer, GenreDetailSerializer, ArtistSerializer,
     QueueSerializer, UserStatusSerializer, LyricLineSerializer, MessageSerializer,
     UserBasicSerializer, CollaboratorRoleSerializer, CollaboratorRoleCreateSerializer,
-    PlaylistEditHistorySerializer, OfflineDownloadSerializer, ArtistDetailSerializer
+    PlaylistEditHistorySerializer, OfflineDownloadSerializer, ArtistDetailSerializer,
+    SongAdminSerializer
 )
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -36,7 +37,8 @@ import logging
 import mimetypes
 import re
 from wsgiref.util import FileWrapper
-from django_filters import rest_framework as DjangoFilterBackend
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter, OrderingFilter
 
 User = get_user_model()
 
@@ -2074,7 +2076,7 @@ class AdminCollaborativePlaylistListView(generics.ListAPIView):
     permission_classes = [IsAdminUser]
     serializer_class = PlaylistDetailSerializer
     queryset = Playlist.objects.filter(is_collaborative=True)
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    filter_backends = [SearchFilter, OrderingFilter]
     search_fields = ['name', 'description', 'user__username']
     ordering_fields = ['name', 'created_at', 'updated_at']
     
@@ -2909,17 +2911,17 @@ class SongStreamView(APIView):
 class AdminSongViewSet(viewsets.ModelViewSet):
     """ViewSet để quản lý bài hát dành riêng cho admin"""
     queryset = Song.objects.all().order_by('-created_at')
-    serializer_class = SongSerializer
+    serializer_class = SongAdminSerializer
     permission_classes = [IsAdminUser]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
-    search_fields = ['title', 'artist', 'album', 'genre']
-    ordering_fields = ['title', 'artist', 'created_at', 'play_count', 'likes_count', 'release_date']
-    filterset_fields = ['artist', 'genre', 'album']
+    filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
+    search_fields = ['title', 'artist__name', 'album__title']
+    ordering_fields = ['title', 'play_count', 'release_date', 'created_at', 'likes_count']
+    filterset_fields = ['artist', 'genre', 'album', 'is_approved']
+    pagination_class = PageNumberPagination
     
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return SongDetailSerializer
-        return SongSerializer
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        return context
     
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
@@ -2964,7 +2966,7 @@ class AdminArtistViewSet(viewsets.ModelViewSet):
     queryset = Artist.objects.all()
     serializer_class = ArtistSerializer
     permission_classes = [IsAdminUser]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
+    filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
     search_fields = ['name', 'bio']
     ordering_fields = ['name', 'id']
     
@@ -3019,9 +3021,9 @@ class AdminAlbumViewSet(viewsets.ModelViewSet):
     queryset = Album.objects.all().order_by('-release_date')
     serializer_class = AlbumSerializer
     permission_classes = [IsAdminUser]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
-    search_fields = ['title', 'artist', 'description']
-    ordering_fields = ['title', 'artist', 'release_date', 'created_at']
+    filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
+    search_fields = ['title', 'artist__name', 'description']
+    ordering_fields = ['title', 'artist__name', 'release_date', 'created_at']
     filterset_fields = ['artist']
     
     def get_serializer_class(self):
@@ -3094,7 +3096,7 @@ class AdminGenreViewSet(viewsets.ModelViewSet):
     queryset = Genre.objects.all()
     serializer_class = GenreSerializer
     permission_classes = [IsAdminUser]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
+    filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
     search_fields = ['name', 'description']
     ordering_fields = ['name', 'id']
     
@@ -3166,7 +3168,7 @@ class AdminPlaylistViewSet(viewsets.ModelViewSet):
     queryset = Playlist.objects.all().order_by('-created_at')
     serializer_class = PlaylistSerializer
     permission_classes = [IsAdminUser]
-    filter_backends = [filters.SearchFilter, filters.OrderingFilter, DjangoFilterBackend]
+    filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
     search_fields = ['name', 'description', 'user__username']
     ordering_fields = ['name', 'created_at', 'updated_at']
     filterset_fields = ['user', 'is_public', 'is_collaborative']
