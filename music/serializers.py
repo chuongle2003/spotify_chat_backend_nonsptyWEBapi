@@ -218,6 +218,19 @@ class PlaylistSerializer(serializers.ModelSerializer):
     def get_collaborators_count(self, obj):
         return obj.collaborators.count()
 
+    def validate_cover_image(self, value):
+        if value:
+            # Kiểm tra kích thước file (tối đa 5MB)
+            if value.size > 5 * 1024 * 1024:
+                raise serializers.ValidationError('Kích thước ảnh không được vượt quá 5MB')
+            
+            # Kiểm tra định dạng file
+            valid_types = ['image/jpeg', 'image/png', 'image/jpg']
+            if value.content_type not in valid_types:
+                raise serializers.ValidationError('Định dạng ảnh không hợp lệ. Chỉ chấp nhận JPEG, JPG và PNG')
+        
+        return value
+
 class PlaylistDetailSerializer(serializers.ModelSerializer):
     user = UserBasicSerializer(read_only=True)
     songs = SongSerializer(many=True, read_only=True)

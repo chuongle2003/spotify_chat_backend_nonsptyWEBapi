@@ -4,7 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status, permissions, viewsets, generics, filters
+from rest_framework import status, permissions, viewsets, generics, filters, serializers
 from rest_framework.pagination import PageNumberPagination
 from .models import (
     Playlist, Song, Album, Genre, Rating, Comment, SongPlayHistory, 
@@ -565,6 +565,7 @@ class PlaylistViewSet(viewsets.ModelViewSet):
     """ViewSet để xử lý các thao tác CRUD với Playlist"""
     queryset = Playlist.objects.all()
     serializer_class = PlaylistSerializer
+    parser_classes = (MultiPartParser, FormParser)
 
     def get_permissions(self):
         """
@@ -607,6 +608,11 @@ class PlaylistViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """Gán user hiện tại làm chủ sở hữu khi tạo playlist"""
+        # Kiểm tra số lượng playlist của user
+        user_playlists_count = Playlist.objects.filter(user=self.request.user).count()
+        if user_playlists_count >= 50:
+            raise serializers.ValidationError('Bạn đã đạt giới hạn tối đa 50 playlist')
+            
         serializer.save(user=self.request.user)
         self.request._request.session['message'] = 'Đã tạo playlist thành công!'
     
@@ -616,14 +622,6 @@ class PlaylistViewSet(viewsets.ModelViewSet):
         if not request.data.get('name'):
             return Response(
                 {'error': 'Tên playlist không được để trống'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Giới hạn số lượng playlist mỗi user
-        user_playlists_count = Playlist.objects.filter(user=request.user).count()
-        if user_playlists_count >= 50:  # Giới hạn tối đa 50 playlist/user
-            return Response(
-                {'error': 'Bạn đã đạt giới hạn tối đa 50 playlist'}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
             
@@ -638,6 +636,11 @@ class PlaylistViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
             
+        # Xử lý xóa ảnh bìa cũ nếu có ảnh mới
+        if 'cover_image' in request.data and playlist.cover_image:
+            if os.path.isfile(playlist.cover_image.path):
+                os.remove(playlist.cover_image.path)
+                
         return super().update(request, *args, **kwargs)
     
     def destroy(self, request, *args, **kwargs):
@@ -649,6 +652,11 @@ class PlaylistViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
             
+        # Xóa file ảnh bìa nếu có
+        if playlist.cover_image:
+            if os.path.isfile(playlist.cover_image.path):
+                os.remove(playlist.cover_image.path)
+                
         return super().destroy(request, *args, **kwargs)
 
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
