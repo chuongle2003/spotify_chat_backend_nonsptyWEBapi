@@ -19,7 +19,7 @@ from .serializers import (
     QueueSerializer, UserStatusSerializer, LyricLineSerializer, MessageSerializer,
     UserBasicSerializer, CollaboratorRoleSerializer, CollaboratorRoleCreateSerializer,
     PlaylistEditHistorySerializer, OfflineDownloadSerializer, ArtistDetailSerializer,
-    SongAdminSerializer
+    SongAdminSerializer, AdminAlbumSerializer, AdminArtistSerializer, AdminGenreSerializer, AdminPlaylistSerializer
 )
 from django.urls import reverse
 from django.contrib.auth import get_user_model
@@ -2913,6 +2913,7 @@ class AdminSongViewSet(viewsets.ModelViewSet):
     queryset = Song.objects.all().order_by('-created_at')
     serializer_class = SongAdminSerializer
     permission_classes = [IsAdminUser]
+    parser_classes = (MultiPartParser, FormParser)
     filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
     search_fields = ['title', 'artist__name', 'album__title']
     ordering_fields = ['title', 'play_count', 'release_date', 'created_at', 'likes_count']
@@ -2922,6 +2923,49 @@ class AdminSongViewSet(viewsets.ModelViewSet):
     def get_serializer_context(self):
         context = super().get_serializer_context()
         return context
+    
+    def perform_create(self, serializer):
+        """Ghi đè phương thức để đảm bảo bài hát được tạo với người dùng hiện tại nếu không có uploaded_by_id"""
+        serializer.save(uploaded_by=self.request.user)
+    
+    def perform_destroy(self, instance):
+        """
+        Xử lý xóa bài hát và các file liên quan
+        """
+        # Xóa file âm thanh nếu có
+        if instance.audio_file:
+            if os.path.isfile(instance.audio_file.path):
+                os.remove(instance.audio_file.path)
+        
+        # Xóa file ảnh bìa nếu có
+        if instance.cover_image:
+            if os.path.isfile(instance.cover_image.path):
+                os.remove(instance.cover_image.path)
+        
+        # Xóa instance từ database
+        super().perform_destroy(instance)
+    
+    def update(self, request, *args, **kwargs):
+        """Xử lý cập nhật bài hát (PUT và PATCH)"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        # Lấy serializer với context bao gồm request để xử lý files
+        serializer = self.get_serializer(
+            instance, 
+            data=request.data, 
+            partial=partial, 
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        # Trả về dữ liệu đã cập nhật
+        if getattr(instance, '_prefetched_objects_cache', None):
+            # Nếu prefetch_related() được sử dụng, cần xoá cache
+            instance._prefetched_objects_cache = {}
+            
+        return Response(serializer.data)
     
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
@@ -2966,6 +3010,7 @@ class AdminArtistViewSet(viewsets.ModelViewSet):
     queryset = Artist.objects.all()
     serializer_class = ArtistSerializer
     permission_classes = [IsAdminUser]
+    parser_classes = (MultiPartParser, FormParser)
     filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
     search_fields = ['name', 'bio']
     ordering_fields = ['name', 'id']
@@ -2973,8 +3018,46 @@ class AdminArtistViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         """Trả về serializer tương ứng với action"""
         if self.action in ['create', 'update', 'partial_update']:
-            return ArtistDetailSerializer
+            return AdminArtistSerializer
         return ArtistSerializer
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        return context
+    
+    def perform_destroy(self, instance):
+        """
+        Xử lý xóa nghệ sĩ và file hình ảnh liên quan
+        """
+        # Xóa file hình ảnh nếu có
+        if instance.image:
+            if os.path.isfile(instance.image.path):
+                os.remove(instance.image.path)
+        
+        # Xóa instance từ database
+        super().perform_destroy(instance)
+    
+    def update(self, request, *args, **kwargs):
+        """Xử lý cập nhật nghệ sĩ (PUT và PATCH)"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        # Lấy serializer với context bao gồm request để xử lý files
+        serializer = self.get_serializer(
+            instance, 
+            data=request.data, 
+            partial=partial, 
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        # Trả về dữ liệu đã cập nhật
+        if getattr(instance, '_prefetched_objects_cache', None):
+            # Nếu prefetch_related() được sử dụng, cần xoá cache
+            instance._prefetched_objects_cache = {}
+            
+        return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
     def songs(self, request, pk=None):
@@ -3021,6 +3104,7 @@ class AdminAlbumViewSet(viewsets.ModelViewSet):
     queryset = Album.objects.all().order_by('-release_date')
     serializer_class = AlbumSerializer
     permission_classes = [IsAdminUser]
+    parser_classes = (MultiPartParser, FormParser)
     filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
     search_fields = ['title', 'artist__name', 'description']
     ordering_fields = ['title', 'artist__name', 'release_date', 'created_at']
@@ -3028,8 +3112,46 @@ class AdminAlbumViewSet(viewsets.ModelViewSet):
     
     def get_serializer_class(self):
         if self.action in ['retrieve', 'create', 'update', 'partial_update']:
-            return AlbumDetailSerializer
+            return AdminAlbumSerializer
         return AlbumSerializer
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        return context
+        
+    def perform_destroy(self, instance):
+        """
+        Xử lý xóa album và file ảnh bìa liên quan
+        """
+        # Xóa file ảnh bìa nếu có
+        if instance.cover_image:
+            if os.path.isfile(instance.cover_image.path):
+                os.remove(instance.cover_image.path)
+        
+        # Xóa instance từ database
+        super().perform_destroy(instance)
+    
+    def update(self, request, *args, **kwargs):
+        """Xử lý cập nhật album (PUT và PATCH)"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        # Lấy serializer với context bao gồm request để xử lý files
+        serializer = self.get_serializer(
+            instance, 
+            data=request.data, 
+            partial=partial, 
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        # Trả về dữ liệu đã cập nhật
+        if getattr(instance, '_prefetched_objects_cache', None):
+            # Nếu prefetch_related() được sử dụng, cần xoá cache
+            instance._prefetched_objects_cache = {}
+            
+        return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
     def songs(self, request, pk=None):
@@ -3096,14 +3218,53 @@ class AdminGenreViewSet(viewsets.ModelViewSet):
     queryset = Genre.objects.all()
     serializer_class = GenreSerializer
     permission_classes = [IsAdminUser]
+    parser_classes = (MultiPartParser, FormParser)
     filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
     search_fields = ['name', 'description']
     ordering_fields = ['name', 'id']
     
     def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return GenreDetailSerializer
+        if self.action in ['retrieve', 'create', 'update', 'partial_update']:
+            return AdminGenreSerializer
         return GenreSerializer
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        return context
+        
+    def perform_destroy(self, instance):
+        """
+        Xử lý xóa thể loại và file hình ảnh liên quan
+        """
+        # Xóa file hình ảnh nếu có
+        if instance.image:
+            if os.path.isfile(instance.image.path):
+                os.remove(instance.image.path)
+        
+        # Xóa instance từ database
+        super().perform_destroy(instance)
+    
+    def update(self, request, *args, **kwargs):
+        """Xử lý cập nhật thể loại (PUT và PATCH)"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        # Lấy serializer với context bao gồm request để xử lý files
+        serializer = self.get_serializer(
+            instance, 
+            data=request.data, 
+            partial=partial, 
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        # Trả về dữ liệu đã cập nhật
+        if getattr(instance, '_prefetched_objects_cache', None):
+            # Nếu prefetch_related() được sử dụng, cần xoá cache
+            instance._prefetched_objects_cache = {}
+            
+        return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
     def songs(self, request, pk=None):
@@ -3168,6 +3329,7 @@ class AdminPlaylistViewSet(viewsets.ModelViewSet):
     queryset = Playlist.objects.all().order_by('-created_at')
     serializer_class = PlaylistSerializer
     permission_classes = [IsAdminUser]
+    parser_classes = (MultiPartParser, FormParser)
     filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
     search_fields = ['name', 'description', 'user__username']
     ordering_fields = ['name', 'created_at', 'updated_at']
@@ -3175,8 +3337,46 @@ class AdminPlaylistViewSet(viewsets.ModelViewSet):
     
     def get_serializer_class(self):
         if self.action in ['retrieve', 'create', 'update', 'partial_update']:
-            return PlaylistDetailSerializer
+            return AdminPlaylistSerializer
         return PlaylistSerializer
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        return context
+        
+    def perform_destroy(self, instance):
+        """
+        Xử lý xóa playlist và file ảnh bìa liên quan
+        """
+        # Xóa file ảnh bìa nếu có
+        if instance.cover_image:
+            if os.path.isfile(instance.cover_image.path):
+                os.remove(instance.cover_image.path)
+        
+        # Xóa instance từ database
+        super().perform_destroy(instance)
+    
+    def update(self, request, *args, **kwargs):
+        """Xử lý cập nhật playlist (PUT và PATCH)"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        # Lấy serializer với context bao gồm request để xử lý files
+        serializer = self.get_serializer(
+            instance, 
+            data=request.data, 
+            partial=partial, 
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        # Trả về dữ liệu đã cập nhật
+        if getattr(instance, '_prefetched_objects_cache', None):
+            # Nếu prefetch_related() được sử dụng, cần xoá cache
+            instance._prefetched_objects_cache = {}
+            
+        return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
     def songs(self, request, pk=None):

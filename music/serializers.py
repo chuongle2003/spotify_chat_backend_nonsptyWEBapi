@@ -601,6 +601,8 @@ class SongAdminSerializer(serializers.ModelSerializer):
     uploaded_by_id = serializers.IntegerField(write_only=True, required=False)
     audio_file = serializers.SerializerMethodField()
     cover_image = serializers.SerializerMethodField()
+    audio_file_upload = serializers.FileField(write_only=True, required=False)  
+    cover_image_upload = serializers.ImageField(write_only=True, required=False)
     download_url = serializers.SerializerMethodField()
     stream_url = serializers.SerializerMethodField()
     comments_count = serializers.SerializerMethodField()
@@ -610,9 +612,15 @@ class SongAdminSerializer(serializers.ModelSerializer):
     class Meta:
         model = Song
         fields = ('id', 'title', 'artist', 'album', 'album_info', 'genre', 'genre_info',
-                 'duration', 'audio_file', 'cover_image', 'lyrics', 'release_date',
-                 'likes_count', 'play_count', 'comments_count', 'is_approved',
-                 'uploaded_by', 'uploaded_by_id', 'created_at', 'download_url', 'stream_url')
+                 'duration', 'audio_file', 'cover_image', 'audio_file_upload', 'cover_image_upload',
+                 'lyrics', 'release_date', 'likes_count', 'play_count', 'comments_count', 
+                 'is_approved', 'uploaded_by', 'uploaded_by_id', 'created_at', 
+                 'download_url', 'stream_url')
+        extra_kwargs = {
+            'title': {'required': False},
+            'artist': {'required': False},
+            'duration': {'required': False},
+        }
                  
     def get_audio_file(self, obj):
         if obj and obj.audio_file:
@@ -679,9 +687,65 @@ class SongAdminSerializer(serializers.ModelSerializer):
             except:
                 pass
         return None
+    
+    def create(self, validated_data):
+        """Tạo mới bài hát với khả năng xử lý file upload"""
+        # Lấy ra các trường đặc biệt
+        audio_file_upload = validated_data.pop('audio_file_upload', None)
+        cover_image_upload = validated_data.pop('cover_image_upload', None)
+        uploaded_by_id = validated_data.pop('uploaded_by_id', None)
+        
+        # Set giá trị uploaded_by từ request hoặc từ uploaded_by_id
+        request = self.context.get('request')
+        if uploaded_by_id:
+            try:
+                uploaded_by = User.objects.get(id=uploaded_by_id)
+            except User.DoesNotExist:
+                if request and hasattr(request, 'user'):
+                    uploaded_by = request.user
+                else:
+                    raise serializers.ValidationError("Không tìm thấy người dùng với ID đã cung cấp")
+        else:
+            if request and hasattr(request, 'user'):
+                uploaded_by = request.user
+            else:
+                raise serializers.ValidationError("Không có thông tin người dùng trong request")
+        
+        # Tạo instance bài hát
+        song = Song.objects.create(
+            **validated_data,
+            uploaded_by=uploaded_by
+        )
+        
+        # Xử lý file âm thanh
+        if audio_file_upload:
+            song.audio_file = audio_file_upload
+        elif request and request.FILES and 'audio_file' in request.FILES:
+            song.audio_file = request.FILES['audio_file']
+            
+        # Xử lý ảnh bìa
+        if cover_image_upload:
+            song.cover_image = cover_image_upload
+        elif request and request.FILES and 'cover_image' in request.FILES:
+            song.cover_image = request.FILES['cover_image']
+        
+        song.save()
+        return song
         
     def update(self, instance, validated_data):
         """Hỗ trợ cập nhật bài hát với xử lý an toàn cho các trường"""
+        # Lấy thông tin request và files từ context
+        request = self.context.get('request')
+        
+        # Xử lý audio_file_upload nếu được cung cấp
+        if 'audio_file_upload' in validated_data:
+            instance.audio_file = validated_data.pop('audio_file_upload')
+            
+        # Xử lý cover_image_upload nếu được cung cấp
+        if 'cover_image_upload' in validated_data:
+            instance.cover_image = validated_data.pop('cover_image_upload')
+        
+        # Cập nhật các trường dữ liệu thông thường
         for attr, value in validated_data.items():
             if attr != 'uploaded_by_id':
                 setattr(instance, attr, value)
@@ -693,6 +757,220 @@ class SongAdminSerializer(serializers.ModelSerializer):
                 instance.uploaded_by = user
             except User.DoesNotExist:
                 pass
+        
+        # Khả năng tương thích ngược - xử lý files trong request.FILES nếu có
+        if request and request.FILES:
+            # Xử lý file audio nếu được cung cấp
+            if 'audio_file' in request.FILES:
+                instance.audio_file = request.FILES['audio_file']
+            
+            # Xử lý ảnh bìa nếu được cung cấp
+            if 'cover_image' in request.FILES:
+                instance.cover_image = request.FILES['cover_image']
                 
         instance.save()
         return instance 
+
+class AdminAlbumSerializer(serializers.ModelSerializer):
+    """Serializer chuyên biệt cho admin quản lý album"""
+    cover_image = serializers.SerializerMethodField()
+    cover_image_upload = serializers.ImageField(write_only=True, required=False)
+    songs_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Album
+        fields = ('id', 'title', 'artist', 'release_date', 'cover_image', 'cover_image_upload',
+                  'description', 'created_at', 'songs_count')
+        extra_kwargs = {
+            'title': {'required': False},
+            'artist': {'required': False},
+        }
+    
+    def get_songs_count(self, obj):
+        return Song.objects.filter(album=obj.title).count()
+        
+    def get_cover_image(self, obj):
+        if obj and obj.cover_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_image.url)
+            return f"{settings.SITE_URL}{obj.cover_image.url}"
+        return None
+    
+    def update(self, instance, validated_data):
+        """Hỗ trợ cập nhật album với xử lý an toàn cho các trường"""
+        # Lấy thông tin request và files từ context
+        request = self.context.get('request')
+        
+        # Xử lý cover_image_upload nếu được cung cấp
+        if 'cover_image_upload' in validated_data:
+            instance.cover_image = validated_data.pop('cover_image_upload')
+            
+        # Cập nhật các trường dữ liệu thông thường
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
+        # Khả năng tương thích ngược - xử lý files trong request.FILES nếu có
+        if request and request.FILES:
+            # Xử lý ảnh bìa nếu được cung cấp
+            if 'cover_image' in request.FILES:
+                instance.cover_image = request.FILES['cover_image']
+                
+        instance.save()
+        return instance 
+
+class AdminArtistSerializer(serializers.ModelSerializer):
+    """Serializer chuyên biệt cho admin quản lý nghệ sĩ"""
+    image = serializers.SerializerMethodField()
+    image_upload = serializers.ImageField(write_only=True, required=False)
+    songs_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Artist
+        fields = ('id', 'name', 'bio', 'image', 'image_upload', 'songs_count')
+        extra_kwargs = {
+            'name': {'required': False},
+        }
+    
+    def get_songs_count(self, obj):
+        return Song.objects.filter(artist=obj.name).count()
+        
+    def get_image(self, obj):
+        if obj and obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return f"{settings.SITE_URL}{obj.image.url}"
+        return None
+    
+    def update(self, instance, validated_data):
+        """Hỗ trợ cập nhật nghệ sĩ với xử lý an toàn cho các trường"""
+        # Lấy thông tin request và files từ context
+        request = self.context.get('request')
+        
+        # Xử lý image_upload nếu được cung cấp
+        if 'image_upload' in validated_data:
+            instance.image = validated_data.pop('image_upload')
+            
+        # Cập nhật các trường dữ liệu thông thường
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
+        # Khả năng tương thích ngược - xử lý files trong request.FILES nếu có
+        if request and request.FILES:
+            # Xử lý ảnh nếu được cung cấp
+            if 'image' in request.FILES:
+                instance.image = request.FILES['image']
+                
+        instance.save()
+        return instance 
+
+class AdminGenreSerializer(serializers.ModelSerializer):
+    """Serializer chuyên biệt cho admin quản lý thể loại"""
+    image = serializers.SerializerMethodField()
+    image_upload = serializers.ImageField(write_only=True, required=False)
+    songs_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Genre
+        fields = ('id', 'name', 'description', 'image', 'image_upload', 'songs_count')
+        extra_kwargs = {
+            'name': {'required': False},
+        }
+    
+    def get_songs_count(self, obj):
+        return Song.objects.filter(genre=obj.name).count()
+        
+    def get_image(self, obj):
+        if obj and obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return f"{settings.SITE_URL}{obj.image.url}"
+        return None
+    
+    def update(self, instance, validated_data):
+        """Hỗ trợ cập nhật thể loại với xử lý an toàn cho các trường"""
+        # Lấy thông tin request và files từ context
+        request = self.context.get('request')
+        
+        # Xử lý image_upload nếu được cung cấp
+        if 'image_upload' in validated_data:
+            instance.image = validated_data.pop('image_upload')
+            
+        # Cập nhật các trường dữ liệu thông thường
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
+        # Khả năng tương thích ngược - xử lý files trong request.FILES nếu có
+        if request and request.FILES:
+            # Xử lý ảnh nếu được cung cấp
+            if 'image' in request.FILES:
+                instance.image = request.FILES['image']
+                
+        instance.save()
+        return instance
+
+class AdminPlaylistSerializer(serializers.ModelSerializer):
+    """Serializer chuyên biệt cho admin quản lý playlist"""
+    user = UserBasicSerializer(read_only=True)
+    user_id = serializers.IntegerField(write_only=True, required=False)
+    cover_image = serializers.SerializerMethodField()
+    cover_image_upload = serializers.ImageField(write_only=True, required=False)
+    songs_count = serializers.SerializerMethodField()
+    followers_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Playlist
+        fields = ('id', 'name', 'description', 'is_public', 'is_collaborative', 
+                  'cover_image', 'cover_image_upload', 'user', 'user_id',
+                  'created_at', 'updated_at', 'songs_count', 'followers_count')
+        read_only_fields = ('created_at', 'updated_at')
+        extra_kwargs = {
+            'name': {'required': False},
+        }
+    
+    def get_songs_count(self, obj):
+        return obj.songs.count()
+        
+    def get_followers_count(self, obj):
+        return obj.followers.count()
+        
+    def get_cover_image(self, obj):
+        if obj and obj.cover_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_image.url)
+            return f"{settings.SITE_URL}{obj.cover_image.url}"
+        return None
+    
+    def update(self, instance, validated_data):
+        """Hỗ trợ cập nhật playlist với xử lý an toàn cho các trường"""
+        # Lấy thông tin request và files từ context
+        request = self.context.get('request')
+        
+        # Xử lý cover_image_upload nếu được cung cấp
+        if 'cover_image_upload' in validated_data:
+            instance.cover_image = validated_data.pop('cover_image_upload')
+            
+        # Cập nhật các trường dữ liệu thông thường
+        for attr, value in validated_data.items():
+            if attr != 'user_id':
+                setattr(instance, attr, value)
+        
+        # Xử lý user_id nếu được cung cấp
+        if 'user_id' in validated_data:
+            try:
+                user = User.objects.get(id=validated_data['user_id'])
+                instance.user = user
+            except User.DoesNotExist:
+                pass
+                
+        # Khả năng tương thích ngược - xử lý files trong request.FILES nếu có
+        if request and request.FILES:
+            # Xử lý ảnh bìa nếu được cung cấp
+            if 'cover_image' in request.FILES:
+                instance.cover_image = request.FILES['cover_image']
+                
+        instance.save()
+        return instance
