@@ -197,7 +197,7 @@ else:
 # Cấu hình REST Framework
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'utils.authentication.CustomJWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -209,6 +209,13 @@ REST_FRAMEWORK = {
         'rest_framework.filters.OrderingFilter',
     ],
     'EXCEPTION_HANDLER': 'utils.exception_handlers.custom_exception_handler',
+    'UNAUTHENTICATED_TOKEN': None,
+    'DEFAULT_AUTHENTICATION_HEADER_PREFIX': 'Bearer',
+    'NON_FIELD_ERRORS_KEY': 'error',
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+        'rest_framework.renderers.BrowsableAPIRenderer',
+    ],
 }
 
 SIMPLE_JWT = {

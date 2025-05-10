@@ -81,6 +81,19 @@ class AdminViewSet(viewsets.ModelViewSet):
             return AdminUserCreateSerializer
         return AdminUserSerializer
     
+    def permission_denied(self, request, message=None, code=None):
+        """
+        Xử lý trường hợp không có quyền truy cập bằng cách trả về lỗi JSON thay vì redirect
+        """
+        if request.authenticators and not request.successful_authenticator:
+            # Chưa xác thực - trả về lỗi 401 với JSON
+            from rest_framework.exceptions import NotAuthenticated
+            raise NotAuthenticated()
+        else:
+            # Đã xác thực nhưng không có quyền - trả về lỗi 403 với JSON
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied(message)
+    
     @action(detail=True, methods=['get'])
     def complete(self, request, pk=None):
         """Get all details for a user including related data"""
