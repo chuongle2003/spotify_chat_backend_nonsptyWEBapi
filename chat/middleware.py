@@ -4,7 +4,12 @@ from django.contrib.auth import get_user_model
 from channels.db import database_sync_to_async
 from .models import ChatRestriction
 from rest_framework_simplejwt.exceptions import TokenError
-from rest_framework_simplejwt.tokens import AccessToken
+from rest_framework_simplejwt.tokens import AccessToken, UntypedToken
+from channels.middleware import BaseMiddleware
+from django.contrib.auth.models import AnonymousUser
+from urllib.parse import parse_qs
+import jwt
+from django.conf import settings
 
 User = get_user_model()
 
@@ -72,8 +77,50 @@ class ChatRestrictionMiddleware:
 def get_user_from_token(token):
     """Hàm tiện ích để lấy thông tin người dùng từ token"""
     try:
+        # Đầu tiên thử với AccessToken
         token_obj = AccessToken(token)
         user_id = token_obj['user_id']
         return User.objects.get(id=user_id)
     except (TokenError, User.DoesNotExist):
-        return None 
+        try:
+            # Thử với UntypedToken
+            token_obj = UntypedToken(token)
+            user_id = token_obj['user_id']
+            return User.objects.get(id=user_id)
+        except (TokenError, User.DoesNotExist):
+            return None
+
+class TokenAuthMiddleware(BaseMiddleware):
+    """
+    Middleware xác thực JWT token từ query parameter
+    """
+    async def __call__(self, scope, receive, send):
+        # Chỉ xử lý kết nối WebSocket, bỏ qua các loại khác
+        if scope["type"] != "websocket":
+            return await self.inner(scope, receive, send)
+
+        # Trích xuất token từ query string
+        query_string = scope.get("query_string", b"").decode()
+        query_params = parse_qs(query_string)
+        token = query_params.get("token", [None])[0]
+        
+        # Nếu không có token trong query parameter, đặt người dùng là AnonymousUser
+        if not token:
+            scope["user"] = AnonymousUser()
+            return await self.inner(scope, receive, send)
+        
+        # Nếu có token, xác thực và lấy thông tin người dùng
+        try:
+            # Thử xác thực token
+            user = await self.get_user_from_token(token)
+            scope["user"] = user if user else AnonymousUser()
+        except Exception:
+            # Nếu có lỗi, đặt người dùng là AnonymousUser
+            scope["user"] = AnonymousUser()
+        
+        return await self.inner(scope, receive, send)
+    
+    @database_sync_to_async
+    def get_user_from_token(self, token):
+        """Lấy user từ token"""
+        return get_user_from_token(token) 
