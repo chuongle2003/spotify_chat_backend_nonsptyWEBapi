@@ -22,3 +22,5 @@ mutagen==1.47.0
 eyed3==0.9.7
 google-generativeai==0.8.5
 django-filter==23.1
+tinytag==2.1.1
+django-storages==1.14.6
