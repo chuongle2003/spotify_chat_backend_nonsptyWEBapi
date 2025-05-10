@@ -630,10 +630,51 @@ class SongAdminSerializer(serializers.ModelSerializer):
                  'is_approved', 'uploaded_by', 'uploaded_by_id', 'created_at', 
                  'download_url', 'stream_url')
         extra_kwargs = {
-            'title': {'required': False},
-            'artist': {'required': False},
+            'title': {'required': True},
+            'artist': {'required': True},
             'duration': {'required': False},
         }
+    
+    def validate_audio_file_upload(self, value):
+        if value:
+            # Kiểm tra kích thước file (giới hạn 50MB)
+            if value.size > 50 * 1024 * 1024:
+                raise serializers.ValidationError("Kích thước file quá lớn (tối đa 50MB)")
+            
+            # Kiểm tra định dạng file
+            import os
+            ext = os.path.splitext(value.name)[1].lower()
+            valid_extensions = ['.mp3', '.wav', '.ogg', '.m4a']
+            if ext not in valid_extensions:
+                raise serializers.ValidationError(f"Định dạng file không được hỗ trợ. Hỗ trợ: {', '.join(valid_extensions)}")
+        return value
+    
+    def validate_cover_image_upload(self, value):
+        if value:
+            # Kiểm tra kích thước file (giới hạn 5MB)
+            if value.size > 5 * 1024 * 1024:
+                raise serializers.ValidationError("Kích thước ảnh quá lớn (tối đa 5MB)")
+            
+            # Kiểm tra định dạng file
+            import os
+            ext = os.path.splitext(value.name)[1].lower()
+            valid_extensions = ['.jpg', '.jpeg', '.png', '.webp']
+            if ext not in valid_extensions:
+                raise serializers.ValidationError(f"Định dạng ảnh không được hỗ trợ. Hỗ trợ: {', '.join(valid_extensions)}")
+        return value
+    
+    def validate_release_date(self, value):
+        if value:
+            try:
+                from django.utils.dateparse import parse_date
+                if isinstance(value, str):
+                    parsed_date = parse_date(value)
+                    if not parsed_date:
+                        raise serializers.ValidationError("Định dạng ngày không hợp lệ (sử dụng YYYY-MM-DD)")
+                    return parsed_date
+            except Exception as e:
+                raise serializers.ValidationError(f"Lỗi khi xử lý ngày phát hành: {str(e)}")
+        return value
                  
     def get_audio_file(self, obj):
         if obj and obj.audio_file:
@@ -683,7 +724,7 @@ class SongAdminSerializer(serializers.ModelSerializer):
                         'title': album.title,
                         'artist': album.artist
                     }
-            except:
+            except Exception:
                 pass
         return None
         
@@ -697,92 +738,134 @@ class SongAdminSerializer(serializers.ModelSerializer):
                         'id': genre.id,
                         'name': genre.name
                     }
-            except:
+            except Exception:
                 pass
         return None
     
     def create(self, validated_data):
         """Tạo mới bài hát với khả năng xử lý file upload"""
-        # Lấy ra các trường đặc biệt
-        audio_file_upload = validated_data.pop('audio_file_upload', None)
-        cover_image_upload = validated_data.pop('cover_image_upload', None)
-        uploaded_by_id = validated_data.pop('uploaded_by_id', None)
-        
-        # Set giá trị uploaded_by từ request hoặc từ uploaded_by_id
-        request = self.context.get('request')
-        if uploaded_by_id:
-            try:
-                uploaded_by = User.objects.get(id=uploaded_by_id)
-            except User.DoesNotExist:
+        try:
+            # Lấy ra các trường đặc biệt
+            audio_file_upload = validated_data.pop('audio_file_upload', None)
+            cover_image_upload = validated_data.pop('cover_image_upload', None)
+            uploaded_by_id = validated_data.pop('uploaded_by_id', None)
+            
+            # Set giá trị uploaded_by từ request hoặc từ uploaded_by_id
+            request = self.context.get('request')
+            if uploaded_by_id:
+                try:
+                    uploaded_by = User.objects.get(id=uploaded_by_id)
+                except User.DoesNotExist:
+                    if request and hasattr(request, 'user'):
+                        uploaded_by = request.user
+                    else:
+                        raise serializers.ValidationError("Không tìm thấy người dùng với ID đã cung cấp")
+            else:
                 if request and hasattr(request, 'user'):
                     uploaded_by = request.user
                 else:
-                    raise serializers.ValidationError("Không tìm thấy người dùng với ID đã cung cấp")
-        else:
-            if request and hasattr(request, 'user'):
-                uploaded_by = request.user
-            else:
-                raise serializers.ValidationError("Không có thông tin người dùng trong request")
-        
-        # Tạo instance bài hát
-        song = Song.objects.create(
-            **validated_data,
-            uploaded_by=uploaded_by
-        )
-        
-        # Xử lý file âm thanh
-        if audio_file_upload:
-            song.audio_file = audio_file_upload
-        elif request and request.FILES and 'audio_file' in request.FILES:
-            song.audio_file = request.FILES['audio_file']
+                    raise serializers.ValidationError("Không có thông tin người dùng trong request")
             
-        # Xử lý ảnh bìa
-        if cover_image_upload:
-            song.cover_image = cover_image_upload
-        elif request and request.FILES and 'cover_image' in request.FILES:
-            song.cover_image = request.FILES['cover_image']
-        
-        song.save()
-        return song
+            # Kiểm tra file âm thanh bắt buộc
+            if not audio_file_upload and not (request and request.FILES and 'audio_file' in request.FILES):
+                raise serializers.ValidationError("File âm thanh là bắt buộc")
+            
+            # Tạo instance bài hát
+            song = Song.objects.create(
+                **validated_data,
+                uploaded_by=uploaded_by
+            )
+            
+            # Xử lý file âm thanh
+            if audio_file_upload:
+                song.audio_file = audio_file_upload
+            elif request and request.FILES and 'audio_file' in request.FILES:
+                song.audio_file = request.FILES['audio_file']
+                
+            # Xử lý ảnh bìa
+            if cover_image_upload:
+                song.cover_image = cover_image_upload
+            elif request and request.FILES and 'cover_image' in request.FILES:
+                song.cover_image = request.FILES['cover_image']
+            
+            # Nếu không có duration, thử tính từ file
+            if not validated_data.get('duration') and song.audio_file:
+                try:
+                    from tinytag import TinyTag
+                    tag = TinyTag.get(song.audio_file.path)
+                    song.duration = int(tag.duration or 0)
+                except (ImportError, Exception) as e:
+                    # Lỗi khi đọc thông tin từ file, đặt giá trị mặc định
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Không thể đọc thông tin duration từ file: {str(e)}")
+                    song.duration = 0
+            
+            song.save()
+            return song
+        except Exception as e:
+            # Ghi log chi tiết lỗi
+            import logging, traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f"Lỗi trong SongAdminSerializer.create: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise serializers.ValidationError(f"Không thể tạo bài hát: {str(e)}")
         
     def update(self, instance, validated_data):
         """Hỗ trợ cập nhật bài hát với xử lý an toàn cho các trường"""
-        # Lấy thông tin request và files từ context
-        request = self.context.get('request')
-        
-        # Xử lý audio_file_upload nếu được cung cấp
-        if 'audio_file_upload' in validated_data:
-            instance.audio_file = validated_data.pop('audio_file_upload')
+        try:
+            # Lấy thông tin request và files từ context
+            request = self.context.get('request')
             
-        # Xử lý cover_image_upload nếu được cung cấp
-        if 'cover_image_upload' in validated_data:
-            instance.cover_image = validated_data.pop('cover_image_upload')
-        
-        # Cập nhật các trường dữ liệu thông thường
-        for attr, value in validated_data.items():
-            if attr != 'uploaded_by_id':
-                setattr(instance, attr, value)
-        
-        # Xử lý uploaded_by_id nếu được cung cấp
-        if 'uploaded_by_id' in validated_data:
-            try:
-                user = User.objects.get(id=validated_data['uploaded_by_id'])
-                instance.uploaded_by = user
-            except User.DoesNotExist:
-                pass
-        
-        # Khả năng tương thích ngược - xử lý files trong request.FILES nếu có
-        if request and request.FILES:
-            # Xử lý file audio nếu được cung cấp
-            if 'audio_file' in request.FILES:
-                instance.audio_file = request.FILES['audio_file']
-            
-            # Xử lý ảnh bìa nếu được cung cấp
-            if 'cover_image' in request.FILES:
-                instance.cover_image = request.FILES['cover_image']
+            # Xử lý audio_file_upload nếu được cung cấp
+            if 'audio_file_upload' in validated_data:
+                instance.audio_file = validated_data.pop('audio_file_upload')
                 
-        instance.save()
-        return instance 
+            # Xử lý cover_image_upload nếu được cung cấp
+            if 'cover_image_upload' in validated_data:
+                instance.cover_image = validated_data.pop('cover_image_upload')
+            
+            # Cập nhật các trường dữ liệu thông thường
+            for attr, value in validated_data.items():
+                if attr != 'uploaded_by_id':
+                    setattr(instance, attr, value)
+            
+            # Xử lý uploaded_by_id nếu được cung cấp
+            if 'uploaded_by_id' in validated_data:
+                try:
+                    user = User.objects.get(id=validated_data['uploaded_by_id'])
+                    instance.uploaded_by = user
+                except User.DoesNotExist:
+                    pass
+            
+            # Khả năng tương thích ngược - xử lý files trong request.FILES nếu có
+            if request and request.FILES:
+                # Xử lý file audio nếu được cung cấp
+                if 'audio_file' in request.FILES:
+                    instance.audio_file = request.FILES['audio_file']
+                
+                # Xử lý ảnh bìa nếu được cung cấp
+                if 'cover_image' in request.FILES:
+                    instance.cover_image = request.FILES['cover_image']
+            
+            # Nếu duration = 0 và có file âm thanh, thử tính lại từ file
+            if (instance.duration == 0 or not instance.duration) and instance.audio_file:
+                try:
+                    from tinytag import TinyTag
+                    tag = TinyTag.get(instance.audio_file.path)
+                    instance.duration = int(tag.duration or 0)
+                except Exception:
+                    pass
+                    
+            instance.save()
+            return instance
+        except Exception as e:
+            # Ghi log chi tiết lỗi
+            import logging, traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f"Lỗi trong SongAdminSerializer.update: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise serializers.ValidationError(f"Không thể cập nhật bài hát: {str(e)}")
 
 class AdminAlbumSerializer(serializers.ModelSerializer):
     """Serializer chuyên biệt cho admin quản lý album"""

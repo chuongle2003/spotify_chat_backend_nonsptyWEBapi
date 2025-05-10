@@ -208,6 +208,7 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ],
+    'EXCEPTION_HANDLER': 'utils.exception_handlers.custom_exception_handler',
 }
 
 SIMPLE_JWT = {
@@ -237,6 +238,18 @@ SIMPLE_JWT = {
 # Cấu hình Media
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Đảm bảo thư mục media tồn tại
+os.makedirs(MEDIA_ROOT, exist_ok=True)
+os.makedirs(os.path.join(MEDIA_ROOT, 'songs'), exist_ok=True)
+os.makedirs(os.path.join(MEDIA_ROOT, 'covers'), exist_ok=True)
+os.makedirs(os.path.join(MEDIA_ROOT, 'album_covers'), exist_ok=True)
+os.makedirs(os.path.join(MEDIA_ROOT, 'genre_images'), exist_ok=True)
+os.makedirs(os.path.join(MEDIA_ROOT, 'artist_images'), exist_ok=True)
+os.makedirs(os.path.join(MEDIA_ROOT, 'message_attachments'), exist_ok=True)
+os.makedirs(os.path.join(MEDIA_ROOT, 'message_images'), exist_ok=True)
+os.makedirs(os.path.join(MEDIA_ROOT, 'voice_notes'), exist_ok=True)
+os.makedirs(os.path.join(MEDIA_ROOT, 'playlist_covers'), exist_ok=True)
 
 # URL chính của trang web (dùng cho URL đầy đủ)
 # Sử dụng localhost trong môi trường phát triển và URL thực trong môi trường production

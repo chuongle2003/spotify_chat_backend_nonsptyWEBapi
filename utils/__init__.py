@@ -1,3 +1,4 @@
 """
-Utility functions for spotify_chat_backend
-""" 
+Utility modules for the project
+"""
+from .exception_handlers import custom_exception_handler 

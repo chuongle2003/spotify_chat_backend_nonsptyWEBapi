@@ -39,6 +39,7 @@ import re
 from wsgiref.util import FileWrapper
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
+from django.db import transaction
 
 User = get_user_model()
 
@@ -2932,48 +2933,99 @@ class AdminSongViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         return context
     
+    @transaction.atomic
+    def create(self, request, *args, **kwargs):
+        try:
+            # Thử sử dụng create mặc định
+            return super().create(request, *args, **kwargs)
+        except Exception as e:
+            # Đảm bảo transaction rollback
+            transaction.set_rollback(True)
+            
+            # Log lỗi chi tiết
+            import logging, traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f"Lỗi khi tạo bài hát: {str(e)}")
+            logger.error(traceback.format_exc())
+            
+            # Trả về lỗi 400 với thông tin chi tiết thay vì 500
+            return Response(
+                {"error": f"Không thể tạo bài hát: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
     def perform_create(self, serializer):
         """Ghi đè phương thức để đảm bảo bài hát được tạo với người dùng hiện tại nếu không có uploaded_by_id"""
-        serializer.save(uploaded_by=self.request.user)
+        try:
+            # Lưu bài hát với người dùng hiện tại
+            instance = serializer.save(uploaded_by=self.request.user)
+            
+            # Nếu instance.duration không được đặt và có file audio, thử tính
+            if (not instance.duration or instance.duration == 0) and instance.audio_file:
+                try:
+                    # Đảm bảo file đã được lưu trên đĩa
+                    if hasattr(instance.audio_file, 'path') and os.path.exists(instance.audio_file.path):
+                        from tinytag import TinyTag
+                        tag = TinyTag.get(instance.audio_file.path)
+                        instance.duration = int(tag.duration or 0)
+                        instance.save(update_fields=['duration'])
+                except Exception as e:
+                    # Log lỗi nhưng không cần raise exception
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Không thể tính duration: {str(e)}")
+            
+            return instance
+        except Exception as e:
+            import logging, traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f"Lỗi trong perform_create(): {str(e)}")
+            logger.error(traceback.format_exc())
+            raise
+    
+    @transaction.atomic
+    def update(self, request, *args, **kwargs):
+        try:
+            return super().update(request, *args, **kwargs)
+        except Exception as e:
+            # Đảm bảo transaction rollback
+            transaction.set_rollback(True)
+            
+            # Log lỗi chi tiết
+            import logging, traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f"Lỗi khi cập nhật bài hát: {str(e)}")
+            logger.error(traceback.format_exc())
+            
+            # Trả về lỗi 400 với thông tin chi tiết thay vì 500
+            return Response(
+                {"error": f"Không thể cập nhật bài hát: {str(e)}"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
     
     def perform_destroy(self, instance):
         """
         Xử lý xóa bài hát và các file liên quan
         """
-        # Xóa file âm thanh nếu có
-        if instance.audio_file:
-            if os.path.isfile(instance.audio_file.path):
-                os.remove(instance.audio_file.path)
-        
-        # Xóa file ảnh bìa nếu có
-        if instance.cover_image:
-            if os.path.isfile(instance.cover_image.path):
-                os.remove(instance.cover_image.path)
-        
-        # Xóa instance từ database
-        super().perform_destroy(instance)
-    
-    def update(self, request, *args, **kwargs):
-        """Xử lý cập nhật bài hát (PUT và PATCH)"""
-        partial = kwargs.pop('partial', False)
-        instance = self.get_object()
-        
-        # Lấy serializer với context bao gồm request để xử lý files
-        serializer = self.get_serializer(
-            instance, 
-            data=request.data, 
-            partial=partial, 
-            context={'request': request}
-        )
-        serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
-        
-        # Trả về dữ liệu đã cập nhật
-        if getattr(instance, '_prefetched_objects_cache', None):
-            # Nếu prefetch_related() được sử dụng, cần xoá cache
-            instance._prefetched_objects_cache = {}
+        try:
+            # Xóa file âm thanh nếu có
+            if instance.audio_file:
+                if os.path.isfile(instance.audio_file.path):
+                    os.remove(instance.audio_file.path)
             
-        return Response(serializer.data)
+            # Xóa file ảnh bìa nếu có
+            if instance.cover_image:
+                if os.path.isfile(instance.cover_image.path):
+                    os.remove(instance.cover_image.path)
+            
+            # Xóa instance từ database
+            super().perform_destroy(instance)
+        except Exception as e:
+            import logging, traceback
+            logger = logging.getLogger(__name__)
+            logger.error(f"Lỗi khi xóa bài hát: {str(e)}")
+            logger.error(traceback.format_exc())
+            raise serializers.ValidationError(f"Không thể xóa bài hát: {str(e)}")
     
     @action(detail=True, methods=['post'])
     def approve(self, request, pk=None):
