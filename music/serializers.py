@@ -632,6 +632,7 @@ class SongAdminSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'title': {'required': True},
             'artist': {'required': True},
+            'genre': {'required': True},
             'duration': {'required': False},
         }
     
@@ -766,9 +767,26 @@ class SongAdminSerializer(serializers.ModelSerializer):
                 else:
                     raise serializers.ValidationError("Không có thông tin người dùng trong request")
             
+            # Kiểm tra các trường bắt buộc
+            missing_fields = []
+            
+            if 'title' not in validated_data or not validated_data['title']:
+                missing_fields.append('title')
+                
+            if 'artist' not in validated_data or not validated_data['artist']:
+                missing_fields.append('artist')
+                
+            if 'genre' not in validated_data or not validated_data['genre']:
+                missing_fields.append('genre')
+            
             # Kiểm tra file âm thanh bắt buộc
-            if not audio_file_upload and not (request and request.FILES and 'audio_file' in request.FILES):
-                raise serializers.ValidationError("File âm thanh là bắt buộc")
+            has_audio_file = audio_file_upload or (request and request.FILES and 'audio_file' in request.FILES)
+            if not has_audio_file:
+                missing_fields.append('audio_file')
+            
+            if missing_fields:
+                error_msg = "Các trường sau là bắt buộc: " + ", ".join(missing_fields)
+                raise serializers.ValidationError(error_msg)
             
             # Tạo instance bài hát
             song = Song.objects.create(

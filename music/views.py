@@ -2936,8 +2936,26 @@ class AdminSongViewSet(viewsets.ModelViewSet):
     @transaction.atomic
     def create(self, request, *args, **kwargs):
         try:
-            # Thử sử dụng create mặc định
-            return super().create(request, *args, **kwargs)
+            # Tạo serializer với dữ liệu đầu vào
+            serializer = self.get_serializer(data=request.data)
+            # Xác thực dữ liệu
+            serializer.is_valid(raise_exception=True)
+            # Lưu bài hát
+            instance = self.perform_create(serializer)
+            # Lấy dữ liệu trả về
+            serializer = self.get_serializer(instance)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        except serializers.ValidationError as e:
+            # Đảm bảo transaction rollback
+            transaction.set_rollback(True)
+            
+            # Trả về lỗi 400 với thông tin chi tiết từ ValidationError
+            if hasattr(e, 'detail'):
+                error_detail = e.detail
+            else:
+                error_detail = {'error': str(e)}
+                
+            return Response(error_detail, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             # Đảm bảo transaction rollback
             transaction.set_rollback(True)
@@ -2948,7 +2966,7 @@ class AdminSongViewSet(viewsets.ModelViewSet):
             logger.error(f"Lỗi khi tạo bài hát: {str(e)}")
             logger.error(traceback.format_exc())
             
-            # Trả về lỗi 400 với thông tin chi tiết thay vì 500
+            # Trả về lỗi 400 với thông tin chi tiết
             return Response(
                 {"error": f"Không thể tạo bài hát: {str(e)}"},
                 status=status.HTTP_400_BAD_REQUEST
