@@ -1,4 +1,4 @@
-from django.http import JsonResponse
+from django.http import HttpResponseForbidden
 from django.urls import resolve
 from django.conf import settings
 import logging
@@ -21,23 +21,7 @@ class PermissionMiddleware:
         has_permission = self._check_permissions(request)
         if not has_permission:
             logger.warning(f"Permission denied for user {request.user} accessing {request.path}")
-            
-            # Trả về response dạng JSON thay vì HTML cho API requests
-            if request.path.startswith('/api/'):
-                # Phân biệt giữa chưa xác thực và không có quyền
-                if not request.user.is_authenticated:
-                    return JsonResponse({
-                        "detail": "Authentication credentials were not provided."
-                    }, status=401)
-                else:
-                    return JsonResponse({
-                        "detail": "You do not have permission to perform this action."
-                    }, status=403)
-            else:
-                # Với các request không phải API, giữ nguyên hành vi
-                return JsonResponse({
-                    "detail": "You don't have permission to access this resource"
-                }, status=403)
+            return HttpResponseForbidden("You don't have permission to access this resource")
             
         return self.get_response(request)
         
