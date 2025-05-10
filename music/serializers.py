@@ -6,6 +6,7 @@ from .models import (
 )
 from django.contrib.auth import get_user_model
 from django.conf import settings
+import os
 
 User = get_user_model()
 
@@ -663,6 +664,18 @@ class SongAdminSerializer(serializers.ModelSerializer):
             'duration': {'required': False},
         }
     
+    def validate_duration(self, value):
+        """Kiểm tra giá trị duration, đảm bảo có giá trị mặc định nếu không được cung cấp"""
+        if value is None:
+            return 0  # Giá trị mặc định
+        try:
+            duration = int(value)
+            if duration < 0:
+                return 0  # Không chấp nhận giá trị âm
+            return duration
+        except (TypeError, ValueError):
+            return 0  # Trả về giá trị mặc định nếu không thể chuyển đổi
+    
     def validate_audio_file_upload(self, value):
         if value:
             # Kiểm tra kích thước file (giới hạn 50MB)
@@ -670,7 +683,6 @@ class SongAdminSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Kích thước file quá lớn (tối đa 50MB)")
             
             # Kiểm tra định dạng file
-            import os
             ext = os.path.splitext(value.name)[1].lower()
             valid_extensions = ['.mp3', '.wav', '.ogg', '.m4a']
             if ext not in valid_extensions:
@@ -684,7 +696,6 @@ class SongAdminSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Kích thước ảnh quá lớn (tối đa 5MB)")
             
             # Kiểm tra định dạng file
-            import os
             ext = os.path.splitext(value.name)[1].lower()
             valid_extensions = ['.jpg', '.jpeg', '.png', '.webp']
             if ext not in valid_extensions:
@@ -816,6 +827,10 @@ class SongAdminSerializer(serializers.ModelSerializer):
                 error_msg = "Các trường sau là bắt buộc: " + ", ".join(missing_fields)
                 raise serializers.ValidationError(error_msg)
             
+            # Đảm bảo có giá trị duration, sử dụng giá trị mặc định nếu không được cung cấp
+            if 'duration' not in validated_data or validated_data['duration'] is None:
+                validated_data['duration'] = 0  # Giá trị mặc định 0, sẽ được cập nhật sau khi tải file
+            
             # Tạo instance bài hát
             song = Song.objects.create(**validated_data)
             
@@ -831,28 +846,30 @@ class SongAdminSerializer(serializers.ModelSerializer):
             elif request and request.FILES and 'cover_image' in request.FILES:
                 song.cover_image = request.FILES['cover_image']
             
-            # Nếu không có duration, thử tính từ file
-            if not validated_data.get('duration') and song.audio_file:
+            # Lưu lại sau khi đã xử lý các file
+            if audio_file_upload or cover_image_upload or (request and request.FILES):
+                song.save()
+                
+            # Cập nhật duration từ file audio nếu cần
+            if song.duration == 0 and song.audio_file and hasattr(song.audio_file, 'path') and os.path.exists(song.audio_file.path):
                 try:
                     from tinytag import TinyTag
                     tag = TinyTag.get(song.audio_file.path)
-                    song.duration = int(tag.duration or 0)
-                except (ImportError, Exception) as e:
-                    # Lỗi khi đọc thông tin từ file, đặt giá trị mặc định
-                    import logging
-                    logger = logging.getLogger(__name__)
-                    logger.warning(f"Không thể đọc thông tin duration từ file: {str(e)}")
-                    song.duration = 0
-            
-            song.save()
+                    if tag.duration:
+                        song.duration = int(tag.duration)
+                        song.save(update_fields=['duration'])
+                except Exception:
+                    # Giữ nguyên duration đã thiết lập
+                    pass
+                    
             return song
         except Exception as e:
-            # Ghi log chi tiết lỗi
             import logging, traceback
             logger = logging.getLogger(__name__)
-            logger.error(f"Lỗi trong SongAdminSerializer.create: {str(e)}")
+            logger.error(f"Lỗi trong create(): {str(e)}")
             logger.error(traceback.format_exc())
-            raise serializers.ValidationError(f"Không thể tạo bài hát: {str(e)}")
+            # Re-raise exception để được xử lý ở tầng cao hơn
+            raise
         
     def update(self, instance, validated_data):
         """Hỗ trợ cập nhật bài hát với xử lý an toàn cho các trường"""

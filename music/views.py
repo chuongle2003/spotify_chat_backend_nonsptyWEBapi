@@ -2987,20 +2987,40 @@ class AdminSongViewSet(viewsets.ModelViewSet):
                 # Nếu đã có thông tin uploaded_by, không thêm lại
                 instance = serializer.save()
             
-            # Nếu instance.duration không được đặt và có file audio, thử tính
+            # Xử lý duration từ file audio nếu có
+            updated_fields = []
+            
+            # Nếu duration không được đặt hoặc là 0, và có file audio, thử tính
             if (not instance.duration or instance.duration == 0) and instance.audio_file:
                 try:
                     # Đảm bảo file đã được lưu trên đĩa
                     if hasattr(instance.audio_file, 'path') and os.path.exists(instance.audio_file.path):
                         from tinytag import TinyTag
                         tag = TinyTag.get(instance.audio_file.path)
-                        instance.duration = int(tag.duration or 0)
-                        instance.save(update_fields=['duration'])
+                        if tag.duration:
+                            instance.duration = int(tag.duration)
+                        else:
+                            # Nếu không lấy được từ tag, đặt giá trị mặc định
+                            instance.duration = 180  # 3 phút mặc định
+                        updated_fields.append('duration')
                 except Exception as e:
                     # Log lỗi nhưng không cần raise exception
                     import logging
                     logger = logging.getLogger(__name__)
                     logger.warning(f"Không thể tính duration: {str(e)}")
+                    
+                    # Đặt giá trị mặc định nếu không lấy được
+                    if not instance.duration or instance.duration == 0:
+                        instance.duration = 180  # 3 phút mặc định
+                        updated_fields.append('duration')
+            elif not instance.duration or instance.duration == 0:
+                # Nếu không có file audio và duration = 0, đặt giá trị mặc định
+                instance.duration = 180  # 3 phút mặc định
+                updated_fields.append('duration')
+            
+            # Lưu lại nếu có cập nhật
+            if updated_fields:
+                instance.save(update_fields=updated_fields)
             
             return instance
         except Exception as e:
