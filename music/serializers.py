@@ -113,6 +113,24 @@ class SongSerializer(serializers.ModelSerializer):
         fields = ('id', 'title', 'artist', 'album', 'duration', 'audio_file', 
                  'cover_image', 'genre', 'likes_count', 'play_count', 
                  'uploaded_by', 'created_at', 'release_date', 'download_url', 'stream_url')
+    
+    def create(self, validated_data):
+        # Đảm bảo không có sự trùng lặp của uploaded_by
+        # Nếu uploaded_by đã được truyền vào serializer.save(), sử dụng nó
+        # Nếu không, lấy từ validated_data nếu có
+        request = self.context.get('request')
+        user = None
+        
+        if 'uploaded_by' in validated_data:
+            user = validated_data.pop('uploaded_by')
+        elif request and hasattr(request, 'user') and request.user.is_authenticated:
+            user = request.user
+            
+        if not user:
+            raise serializers.ValidationError("Không thể xác định người dùng tải lên")
+            
+        # Tạo bài hát với người dùng đã xác định
+        return Song.objects.create(uploaded_by=user, **validated_data)
                  
     def get_audio_file(self, obj):
         if obj.audio_file:

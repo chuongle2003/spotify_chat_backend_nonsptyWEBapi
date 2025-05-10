@@ -495,7 +495,7 @@ class SongUploadView(APIView):
         """Xử lý upload file audio"""
         # Thêm user vào request data
         data = request.data.copy()
-        data['uploaded_by'] = request.user.id
+        # data['uploaded_by'] = request.user.id  # Xóa dòng này
         
         # Xử lý file âm thanh
         audio_file = request.FILES.get('audio_file')
@@ -552,8 +552,8 @@ class SongUploadView(APIView):
         
         serializer = SongSerializer(data=data)
         if serializer.is_valid():
-            # Lưu song
-            song = serializer.save()
+            # Lưu song và truyền uploaded_by trực tiếp vào đây
+            song = serializer.save(uploaded_by=request.user)
             
             # Tạo dữ liệu waveform nếu cần
             # waveform = get_waveform_data(song.audio_file.path)
