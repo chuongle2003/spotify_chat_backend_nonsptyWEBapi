@@ -177,7 +177,11 @@ class SongViewSet(viewsets.ModelViewSet):
         return context
     
     def perform_create(self, serializer):
-        serializer.save(uploaded_by=self.request.user)
+        # Chỉ truyền uploaded_by nếu chưa có trong validated_data
+        if 'uploaded_by' not in serializer.validated_data:
+            serializer.save(uploaded_by=self.request.user)
+        else:
+            serializer.save()
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def play(self, request, pk=None):
@@ -550,10 +554,10 @@ class SongUploadView(APIView):
                 if os.path.exists(temp_file_path):
                     os.remove(temp_file_path)
         
-        serializer = SongSerializer(data=data)
+        serializer = SongSerializer(data=data, context={'request': request})
         if serializer.is_valid():
-            # Lưu song và truyền uploaded_by trực tiếp vào đây
-            song = serializer.save(uploaded_by=request.user)
+            # Lưu song và để serializer tự xử lý uploaded_by
+            song = serializer.save()
             
             # Tạo dữ liệu waveform nếu cần
             # waveform = get_waveform_data(song.audio_file.path)

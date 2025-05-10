@@ -9,6 +9,24 @@ from django.conf import settings
 
 User = get_user_model()
 
+class BaseModelSerializer(serializers.ModelSerializer):
+    """Base serializer với các phương thức tiện ích để xử lý user và context"""
+    
+    def get_current_user(self):
+        """Lấy user hiện tại từ request context"""
+        request = self.context.get('request')
+        if request and hasattr(request, 'user') and request.user.is_authenticated:
+            return request.user
+        return None
+    
+    def ensure_user_in_validated_data(self, validated_data, user_field='user'):
+        """Đảm bảo user được thêm vào validated_data nếu chưa có"""
+        if user_field not in validated_data:
+            user = self.get_current_user()
+            if user:
+                validated_data[user_field] = user
+        return validated_data
+
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -101,7 +119,7 @@ class AlbumBasicSerializer(serializers.ModelSerializer):
         model = Album
         fields = ('id', 'title', 'artist', 'cover_image', 'release_date')
 
-class SongSerializer(serializers.ModelSerializer):
+class SongSerializer(BaseModelSerializer):
     uploaded_by = UserBasicSerializer(read_only=True)
     audio_file = serializers.SerializerMethodField()
     cover_image = serializers.SerializerMethodField()
@@ -115,22 +133,14 @@ class SongSerializer(serializers.ModelSerializer):
                  'uploaded_by', 'created_at', 'release_date', 'download_url', 'stream_url')
     
     def create(self, validated_data):
-        # Đảm bảo không có sự trùng lặp của uploaded_by
-        # Nếu uploaded_by đã được truyền vào serializer.save(), sử dụng nó
-        # Nếu không, lấy từ validated_data nếu có
-        request = self.context.get('request')
-        user = None
-        
-        if 'uploaded_by' in validated_data:
-            user = validated_data.pop('uploaded_by')
-        elif request and hasattr(request, 'user') and request.user.is_authenticated:
-            user = request.user
+        # Đảm bảo uploaded_by được thêm vào validated_data nếu chưa có
+        validated_data = self.ensure_user_in_validated_data(validated_data, 'uploaded_by')
             
-        if not user:
+        if 'uploaded_by' not in validated_data:
             raise serializers.ValidationError("Không thể xác định người dùng tải lên")
             
-        # Tạo bài hát với người dùng đã xác định
-        return Song.objects.create(uploaded_by=user, **validated_data)
+        # Tạo bài hát với dữ liệu đã xác thực
+        return Song.objects.create(**validated_data)
                  
     def get_audio_file(self, obj):
         if obj.audio_file:
@@ -324,7 +334,7 @@ class UserActivitySerializer(serializers.ModelSerializer):
         model = UserActivity
         fields = ('id', 'activity_type', 'song', 'playlist', 'target_user', 'timestamp')
 
-class CommentSerializer(serializers.ModelSerializer):
+class CommentSerializer(BaseModelSerializer):
     user = UserBasicSerializer(read_only=True)
     replies = serializers.SerializerMethodField()
     
@@ -334,7 +344,7 @@ class CommentSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at', 'replies')
         
     def create(self, validated_data):
-        validated_data['user'] = self.context['request'].user
+        validated_data = self.ensure_user_in_validated_data(validated_data)
         return super().create(validated_data)
     
     def get_replies(self, obj):
@@ -343,7 +353,7 @@ class CommentSerializer(serializers.ModelSerializer):
             return CommentSerializer(replies, many=True, context=self.context).data
         return []
 
-class RatingSerializer(serializers.ModelSerializer):
+class RatingSerializer(BaseModelSerializer):
     user = UserBasicSerializer(read_only=True)
     
     class Meta:
@@ -352,7 +362,7 @@ class RatingSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'created_at')
         
     def create(self, validated_data):
-        validated_data['user'] = self.context['request'].user
+        validated_data = self.ensure_user_in_validated_data(validated_data)
         return super().create(validated_data)
 
 class AlbumSerializer(serializers.ModelSerializer):
@@ -606,7 +616,7 @@ class UserRecommendationSerializer(serializers.ModelSerializer):
         fields = ['id', 'user', 'song', 'score', 'created_at']
         read_only_fields = ['user', 'created_at']
 
-class OfflineDownloadSerializer(serializers.ModelSerializer):
+class OfflineDownloadSerializer(BaseModelSerializer):
     song_details = SongSerializer(source='song', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     is_available = serializers.BooleanField(read_only=True)
@@ -622,9 +632,8 @@ class OfflineDownloadSerializer(serializers.ModelSerializer):
         
     def create(self, validated_data):
         # Tự động gán user hiện tại khi tạo mới
-        user = self.context['request'].user
-        validated_data['user'] = user
-        return super().create(validated_data) 
+        validated_data = self.ensure_user_in_validated_data(validated_data)
+        return super().create(validated_data)
 
 class SongAdminSerializer(serializers.ModelSerializer):
     """Serializer chuyên biệt cho admin quản lý bài hát"""
