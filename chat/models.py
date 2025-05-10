@@ -4,6 +4,45 @@ from music.models import Song, Playlist
 
 User = settings.AUTH_USER_MODEL
 
+class Conversation(models.Model):
+    """
+    Model quản lý cuộc trò chuyện giữa hai người dùng
+    """
+    participants = models.ManyToManyField(User, related_name='conversations')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
+    
+    class Meta:
+        db_table = 'chat_conversations'
+    
+    def __str__(self):
+        return f"Conversation {self.id}"
+    
+    @property
+    def last_message(self):
+        return self.messages.order_by('-timestamp').first()
+        
+    def get_other_participant(self, user):
+        """Lấy người dùng còn lại trong cuộc trò chuyện"""
+        return self.participants.exclude(id=user.id).first()
+    
+    @classmethod
+    def get_or_create_conversation(cls, user1, user2):
+        """
+        Lấy cuộc trò chuyện giữa hai người dùng hoặc tạo mới nếu chưa tồn tại
+        """
+        # Tìm cuộc trò chuyện có cả hai người dùng
+        conversations = cls.objects.filter(participants=user1).filter(participants=user2)
+        
+        if conversations.exists():
+            return conversations.first()
+        
+        # Nếu không tìm thấy, tạo mới
+        conversation = cls.objects.create()
+        conversation.participants.add(user1, user2)
+        return conversation
+
 class Message(models.Model):
     MESSAGE_TYPES = (
         ('TEXT', 'Text Message'),
@@ -22,6 +61,7 @@ class Message(models.Model):
         ('HIDDEN', 'Hidden by Admin'),
     )
 
+    conversation = models.ForeignKey(Conversation, on_delete=models.CASCADE, related_name='messages', null=True)
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_sent_messages')
     receiver = models.ForeignKey(User, on_delete=models.CASCADE, related_name='chat_received_messages')
     content = models.TextField(blank=True)
@@ -77,6 +117,11 @@ class Message(models.Model):
             self.message_type = 'VOICE'
         elif self.attachment:
             self.message_type = 'FILE'
+            
+        # Đảm bảo có conversation
+        if not self.conversation and self.sender and self.receiver:
+            self.conversation = Conversation.get_or_create_conversation(self.sender, self.receiver)
+            
         super().save(*args, **kwargs)
 
 class MessageReport(models.Model):

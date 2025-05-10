@@ -2,19 +2,27 @@ from django.urls import path
 from . import views
 from . import consumers
 from .views import (
-    MessageListView, MessageDetailView, ConversationListView, ConversationDetailView,
+    MessageListView, MessageCreateView, MessageDetailView, 
+    ConversationListView, ConversationDetailView, StartConversationView,
     ReportMessageView, AdminMessageListView, AdminMessageDetailView,
     AdminMessageReportListView, AdminMessageReportDetailView,
-    AdminChatRestrictionListView, AdminChatRestrictionDetailView, AdminUserChatStatsView
+    AdminChatRestrictionListView, AdminChatRestrictionDetailView, AdminUserChatStatsView,
+    UserSearchView, ChatSuggestionView
 )
 
 urlpatterns = [
     # API cho người dùng thông thường
     path('messages/', MessageListView.as_view(), name='message-list'),
+    path('messages/create/', MessageCreateView.as_view(), name='message-create'),
     path('messages/<int:pk>/', MessageDetailView.as_view(), name='message-detail'),
     path('conversations/', ConversationListView.as_view(), name='conversation-list'),
-    path('conversations/<int:user_id>/', ConversationDetailView.as_view(), name='conversation-detail'),
+    path('conversations/<int:conversation_id>/messages/', ConversationDetailView.as_view(), name='conversation-messages'),
+    path('conversations/start/', StartConversationView.as_view(), name='start-conversation'),
     path('report-message/', ReportMessageView.as_view(), name='report-message'),
+    
+    # API tìm kiếm và gợi ý người dùng
+    path('users/search/', UserSearchView.as_view(), name='user-search'),
+    path('users/suggestions/', ChatSuggestionView.as_view(), name='chat-suggestions'),
     
     # API cho admin quản lý
     path('admin/messages/', AdminMessageListView.as_view(), name='admin-message-list'),
@@ -30,6 +38,5 @@ urlpatterns = [
 ]
 
 # WebSocket URLs - được xử lý riêng bởi routing.py
-websocket_urlpatterns = [
-    path('ws/chat/<str:room_name>/', consumers.ChatConsumer.as_asgi()),
-] 
+# Đã được cập nhật trong routing.py
+websocket_urlpatterns = [] 

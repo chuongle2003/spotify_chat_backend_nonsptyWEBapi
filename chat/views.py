@@ -4,15 +4,15 @@ from rest_framework import generics, status, filters
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.db.models import Q, Count
+from django.db.models import Q, Count, Max, F, OuterRef, Subquery
 from django.contrib.auth import get_user_model
 from datetime import timedelta
 
-from .models import Message, MessageReport, ChatRestriction
+from .models import Message, MessageReport, ChatRestriction, Conversation
 from .serializers import (
-    MessageSerializer, ConversationSerializer, AdminMessageSerializer,
+    MessageSerializer, MessageCreateSerializer, ConversationSerializer, AdminMessageSerializer,
     MessageReportSerializer, MessageReportCreateSerializer, MessageReportUpdateSerializer,
-    ChatRestrictionSerializer, ChatRestrictionCreateSerializer
+    ChatRestrictionSerializer, ChatRestrictionCreateSerializer, UserBasicSerializer
 )
 from .permissions import IsAdminUser, IsMessageParticipant, IsReporter, IsNotRestricted
 
@@ -21,7 +21,8 @@ User = get_user_model()
 # Create your views here.
 
 # API cho người dùng thông thường
-class MessageListView(generics.ListCreateAPIView):
+class MessageListView(generics.ListAPIView):
+    """API để lấy danh sách tin nhắn của người dùng hiện tại"""
     permission_classes = [IsAuthenticated, IsNotRestricted]
     serializer_class = MessageSerializer
 
@@ -30,10 +31,18 @@ class MessageListView(generics.ListCreateAPIView):
             Q(sender=self.request.user) | Q(receiver=self.request.user)
         ).order_by('-timestamp')
 
-    def perform_create(self, serializer):
-        serializer.save(sender=self.request.user)
+class MessageCreateView(generics.CreateAPIView):
+    """API để tạo tin nhắn mới"""
+    permission_classes = [IsAuthenticated, IsNotRestricted]
+    serializer_class = MessageCreateSerializer
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
 class MessageDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """API xem chi tiết, cập nhật hoặc xóa tin nhắn"""
     permission_classes = [IsAuthenticated, IsMessageParticipant]
     serializer_class = MessageSerializer
     
@@ -43,33 +52,16 @@ class MessageDetailView(generics.RetrieveUpdateDestroyAPIView):
         )
 
 class ConversationListView(generics.ListAPIView):
+    """API để lấy danh sách cuộc trò chuyện của người dùng hiện tại"""
     permission_classes = [IsAuthenticated]
     serializer_class = ConversationSerializer
 
     def get_queryset(self):
+        """Lấy danh sách cuộc trò chuyện có người dùng hiện tại tham gia"""
         user = self.request.user
-        # Truy vấn cuộc trò chuyện gần nhất với mỗi người dùng
-        return Message.objects.raw('''
-            SELECT m.*
-            FROM chat_messages m
-            INNER JOIN (
-                SELECT 
-                    CASE 
-                        WHEN sender_id = %s THEN receiver_id
-                        ELSE sender_id
-                    END as other_user_id,
-                    MAX(timestamp) as max_timestamp
-                FROM chat_messages
-                WHERE sender_id = %s OR receiver_id = %s
-                GROUP BY other_user_id
-            ) latest
-            ON (
-                (m.sender_id = %s AND m.receiver_id = latest.other_user_id) OR
-                (m.receiver_id = %s AND m.sender_id = latest.other_user_id)
-            )
-            AND m.timestamp = latest.max_timestamp
-            ORDER BY m.timestamp DESC
-        ''', [user.id, user.id, user.id, user.id, user.id])
+        return Conversation.objects.filter(
+            participants=user
+        ).order_by('-updated_at')
 
     def get_serializer_context(self):
         context = super().get_serializer_context()
@@ -77,16 +69,24 @@ class ConversationListView(generics.ListAPIView):
         return context
 
 class ConversationDetailView(generics.ListAPIView):
+    """API để lấy tin nhắn của một cuộc trò chuyện cụ thể"""
     permission_classes = [IsAuthenticated]
     serializer_class = MessageSerializer
 
     def get_queryset(self):
         user = self.request.user
-        other_user_id = self.kwargs['user_id']
+        conversation_id = self.kwargs['conversation_id']
         
-        # Đánh dấu tin nhắn là đã đọc khi xem chi tiết cuộc trò chuyện
+        # Lấy cuộc trò chuyện
+        conversation = get_object_or_404(Conversation, id=conversation_id)
+        
+        # Kiểm tra xem người dùng có tham gia vào cuộc trò chuyện không
+        if user not in conversation.participants.all():
+            return Message.objects.none()
+        
+        # Đánh dấu tin nhắn là đã đọc
         unread_messages = Message.objects.filter(
-            sender_id=other_user_id,
+            conversation=conversation,
             receiver=user,
             is_read=False
         )
@@ -96,9 +96,46 @@ class ConversationDetailView(generics.ListAPIView):
             message.save(update_fields=['is_read'])
             
         return Message.objects.filter(
-            (Q(sender=user) & Q(receiver_id=other_user_id)) |
-            (Q(receiver=user) & Q(sender_id=other_user_id))
+            conversation=conversation
         ).order_by('timestamp')
+
+# API để bắt đầu cuộc trò chuyện mới với một người dùng khác
+class StartConversationView(APIView):
+    """API để bắt đầu cuộc trò chuyện mới hoặc trả về cuộc trò chuyện đã tồn tại"""
+    permission_classes = [IsAuthenticated, IsNotRestricted]
+    
+    def post(self, request, format=None):
+        user_id = request.data.get('user_id')
+        
+        if not user_id:
+            return Response(
+                {"error": "Thiếu ID người nhận"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        try:
+            other_user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Người dùng không tồn tại"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+            
+        if user_id == str(request.user.id):
+            return Response(
+                {"error": "Không thể bắt đầu cuộc trò chuyện với chính mình"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        # Lấy hoặc tạo cuộc trò chuyện
+        conversation = Conversation.get_or_create_conversation(request.user, other_user)
+        
+        serializer = ConversationSerializer(
+            conversation, 
+            context={'request': request}
+        )
+        
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 # API cho User báo cáo tin nhắn
 class ReportMessageView(generics.CreateAPIView):
@@ -620,3 +657,52 @@ class AdminPendingReportsView(APIView):
             'total_pending': pending_reports.count(),
             'reported_users': result
         })
+
+# API tìm kiếm người dùng khác
+class UserSearchView(generics.ListAPIView):
+    """API để tìm kiếm người dùng khác để bắt đầu cuộc trò chuyện"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserBasicSerializer
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['username', 'email', 'first_name', 'last_name']
+    
+    def get_queryset(self):
+        """Trả về danh sách người dùng, loại trừ người dùng hiện tại"""
+        # Lấy tham số search từ request
+        search_term = self.request.query_params.get('search', '')
+        
+        if not search_term or len(search_term) < 3:
+            # Nếu không có từ khóa tìm kiếm hoặc quá ngắn, trả về danh sách trống
+            return User.objects.none()
+            
+        # Tìm kiếm người dùng, loại trừ người dùng hiện tại
+        queryset = User.objects.filter(
+            Q(username__icontains=search_term) | 
+            Q(email__icontains=search_term) |
+            Q(first_name__icontains=search_term) |
+            Q(last_name__icontains=search_term)
+        ).exclude(id=self.request.user.id)
+        
+        return queryset
+
+# API gợi ý bạn bè để nhắn tin
+class ChatSuggestionView(generics.ListAPIView):
+    """API gợi ý người dùng để bắt đầu cuộc trò chuyện dựa trên tương tác trước đây"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = UserBasicSerializer
+    
+    def get_queryset(self):
+        """Trả về danh sách người dùng đã từng nhắn tin với người dùng hiện tại"""
+        user = self.request.user
+        
+        # Lấy ID của các cuộc trò chuyện mà người dùng tham gia
+        conversation_ids = Conversation.objects.filter(
+            participants=user
+        ).values_list('id', flat=True)
+        
+        # Lấy danh sách người dùng từ các cuộc trò chuyện đó, loại trừ người dùng hiện tại
+        users = User.objects.filter(
+            conversations__id__in=conversation_ids
+        ).exclude(id=user.id).distinct()
+        
+        return users
