@@ -778,19 +778,20 @@ class SongAdminSerializer(serializers.ModelSerializer):
             cover_image_upload = validated_data.pop('cover_image_upload', None)
             uploaded_by_id = validated_data.pop('uploaded_by_id', None)
             
-            # Set giá trị uploaded_by từ request hoặc từ uploaded_by_id
+            # Set giá trị uploaded_by từ request hoặc từ uploaded_by_id nếu chưa có trong validated_data
             request = self.context.get('request')
-            if uploaded_by_id:
-                try:
-                    uploaded_by = User.objects.get(id=uploaded_by_id)
-                except User.DoesNotExist:
-                    if request and hasattr(request, 'user'):
-                        uploaded_by = request.user
-                    else:
-                        raise serializers.ValidationError("Không tìm thấy người dùng với ID đã cung cấp")
-            else:
-                if request and hasattr(request, 'user'):
-                    uploaded_by = request.user
+            if 'uploaded_by' not in validated_data:
+                if uploaded_by_id:
+                    try:
+                        uploaded_by = User.objects.get(id=uploaded_by_id)
+                        validated_data['uploaded_by'] = uploaded_by
+                    except User.DoesNotExist:
+                        if request and hasattr(request, 'user'):
+                            validated_data['uploaded_by'] = request.user
+                        else:
+                            raise serializers.ValidationError("Không tìm thấy người dùng với ID đã cung cấp")
+                elif request and hasattr(request, 'user'):
+                    validated_data['uploaded_by'] = request.user
                 else:
                     raise serializers.ValidationError("Không có thông tin người dùng trong request")
             
@@ -816,10 +817,7 @@ class SongAdminSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(error_msg)
             
             # Tạo instance bài hát
-            song = Song.objects.create(
-                **validated_data,
-                uploaded_by=uploaded_by
-            )
+            song = Song.objects.create(**validated_data)
             
             # Xử lý file âm thanh
             if audio_file_upload:

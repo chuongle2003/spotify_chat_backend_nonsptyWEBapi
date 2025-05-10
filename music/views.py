@@ -2979,8 +2979,13 @@ class AdminSongViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Ghi đè phương thức để đảm bảo bài hát được tạo với người dùng hiện tại nếu không có uploaded_by_id"""
         try:
-            # Lưu bài hát với người dùng hiện tại
-            instance = serializer.save(uploaded_by=self.request.user)
+            # Kiểm tra xem serializer có chứa uploaded_by hoặc uploaded_by_id trong validated_data không
+            if 'uploaded_by' not in serializer.validated_data and 'uploaded_by_id' not in serializer.validated_data:
+                # Chỉ thêm uploaded_by khi không có sẵn trong validated_data
+                instance = serializer.save(uploaded_by=self.request.user)
+            else:
+                # Nếu đã có thông tin uploaded_by, không thêm lại
+                instance = serializer.save()
             
             # Nếu instance.duration không được đặt và có file audio, thử tính
             if (not instance.duration or instance.duration == 0) and instance.audio_file:
