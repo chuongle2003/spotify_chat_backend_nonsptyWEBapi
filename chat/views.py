@@ -706,3 +706,47 @@ class ChatSuggestionView(generics.ListAPIView):
         ).exclude(id=user.id).distinct()
         
         return users
+
+# API lấy lịch sử tin nhắn giữa hai người dùng
+class MessageHistoryView(generics.ListAPIView):
+    """API để lấy lịch sử tin nhắn giữa hai người dùng dựa trên user ID"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = MessageSerializer
+    
+    def get_queryset(self):
+        # Lấy ID của người dùng thứ hai từ query parameters
+        user1_id = self.request.query_params.get('user1')
+        user2_id = self.request.query_params.get('user2')
+        
+        if not user1_id or not user2_id:
+            return Message.objects.none()
+            
+        try:
+            user1 = User.objects.get(id=user1_id)
+            user2 = User.objects.get(id=user2_id)
+        except User.DoesNotExist:
+            return Message.objects.none()
+            
+        # Kiểm tra xem người dùng hiện tại có phải là một trong hai người dùng không
+        current_user = self.request.user
+        if current_user.id != int(user1_id) and current_user.id != int(user2_id):
+            return Message.objects.none()
+            
+        # Lấy hoặc tạo cuộc trò chuyện giữa hai người dùng
+        conversation = Conversation.get_or_create_conversation(user1, user2)
+        
+        # Đánh dấu tin nhắn là đã đọc nếu người dùng hiện tại là người nhận
+        unread_messages = Message.objects.filter(
+            conversation=conversation,
+            receiver=current_user,
+            is_read=False
+        )
+        
+        for message in unread_messages:
+            message.is_read = True
+            message.save(update_fields=['is_read'])
+            
+        # Trả về tất cả tin nhắn trong cuộc trò chuyện, sắp xếp theo thời gian
+        return Message.objects.filter(
+            conversation=conversation
+        ).order_by('timestamp')

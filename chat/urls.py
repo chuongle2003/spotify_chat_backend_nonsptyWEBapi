@@ -7,7 +7,7 @@ from .views import (
     ReportMessageView, AdminMessageListView, AdminMessageDetailView,
     AdminMessageReportListView, AdminMessageReportDetailView,
     AdminChatRestrictionListView, AdminChatRestrictionDetailView, AdminUserChatStatsView,
-    UserSearchView, ChatSuggestionView
+    UserSearchView, ChatSuggestionView, MessageHistoryView
 )
 
 urlpatterns = [
@@ -15,6 +15,7 @@ urlpatterns = [
     path('messages/', MessageListView.as_view(), name='message-list'),
     path('messages/create/', MessageCreateView.as_view(), name='message-create'),
     path('messages/<int:pk>/', MessageDetailView.as_view(), name='message-detail'),
+    path('messages/history/', MessageHistoryView.as_view(), name='message-history'),
     path('conversations/', ConversationListView.as_view(), name='conversation-list'),
     path('conversations/<int:conversation_id>/messages/', ConversationDetailView.as_view(), name='conversation-messages'),
     path('conversations/start/', StartConversationView.as_view(), name='start-conversation'),
