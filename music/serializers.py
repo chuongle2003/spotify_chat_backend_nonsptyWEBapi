@@ -237,17 +237,27 @@ class PlaylistSerializer(serializers.ModelSerializer):
     user = UserBasicSerializer(read_only=True)
     is_collaborative = serializers.BooleanField(read_only=True)
     collaborators_count = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
+    cover_image_upload = serializers.ImageField(write_only=True, required=False)
 
     class Meta:
         model = Playlist
-        fields = ['id', 'name', 'user', 'description', 'is_public', 'cover_image', 
+        fields = ['id', 'name', 'user', 'description', 'is_public', 'cover_image', 'cover_image_upload',
                   'created_at', 'updated_at', 'is_collaborative', 'collaborators_count']
         read_only_fields = ['user', 'created_at', 'updated_at', 'collaborators_count']
 
     def get_collaborators_count(self, obj):
         return obj.collaborators.count()
+        
+    def get_cover_image(self, obj):
+        if obj.cover_image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.cover_image.url)
+            return f"{settings.SITE_URL}{obj.cover_image.url}"
+        return None
 
-    def validate_cover_image(self, value):
+    def validate_cover_image_upload(self, value):
         if value:
             # Kiểm tra kích thước file (tối đa 5MB)
             if value.size > 5 * 1024 * 1024:
@@ -259,6 +269,29 @@ class PlaylistSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError('Định dạng ảnh không hợp lệ. Chỉ chấp nhận JPEG, JPG và PNG')
         
         return value
+        
+    def create(self, validated_data):
+        cover_image = None
+        if 'cover_image_upload' in validated_data:
+            cover_image = validated_data.pop('cover_image_upload')
+            
+        playlist = Playlist.objects.create(**validated_data)
+        
+        if cover_image:
+            playlist.cover_image = cover_image
+            playlist.save()
+            
+        return playlist
+        
+    def update(self, instance, validated_data):
+        if 'cover_image_upload' in validated_data:
+            instance.cover_image = validated_data.pop('cover_image_upload')
+            
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
+        instance.save()
+        return instance
 
 class PlaylistDetailSerializer(serializers.ModelSerializer):
     user = UserBasicSerializer(read_only=True)
