@@ -8,7 +8,8 @@ from .views import (
     DeclineConnectionView, RemoveConnectionView,
     BlockUserView, PendingConnectionsView,
     ConnectedUsersView, CanChatWithUserView,
-    UserListView, PublicUserListView
+    UserListView, PublicUserListView,
+    ForgotPasswordView, VerifyPasswordResetTokenView
 )
 from rest_framework_simplejwt.views import (
     TokenObtainPairView as LoginView,
@@ -56,4 +57,8 @@ urlpatterns = [
     
     # API kiểm tra quyền chat
     path('chat/can-chat/<str:username>/', CanChatWithUserView.as_view(), name='can_chat_with_user'),
+    
+    # API quên mật khẩu
+    path('auth/forgot-password/', ForgotPasswordView.as_view(), name='forgot_password'),
+    path('auth/reset-password/', VerifyPasswordResetTokenView.as_view(), name='reset_password'),
 ] 
