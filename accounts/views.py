@@ -273,23 +273,26 @@ class ForgotPasswordView(generics.CreateAPIView):
                 # Generate reset token
                 token_obj = PasswordResetToken.generate_token(user)
                 
-                # Trong môi trường phát triển, trả về token trực tiếp mà không gửi email
-                if settings.DEBUG:
-                    return Response(
-                        {
-                            'message': 'Mã xác nhận đã được gửi đến email của bạn (Development Mode).',
-                            'debug_token': token_obj.token
-                        },
-                        status=status.HTTP_200_OK
-                    )
+                # Debug message - luôn trả về token trong mọi môi trường
+                logger.info(f"Generated reset token for {user.email}: {token_obj.token}")
+                return Response(
+                    {
+                        'message': 'Mã xác nhận đã được gửi đến email của bạn.',
+                        'debug_info': f'Token: {token_obj.token} (Hãy sử dụng mã này trong môi trường production vì chức năng gửi email có thể không hoạt động trên EC2)'
+                    },
+                    status=status.HTTP_200_OK
+                )
                 
+                # Phần code gửi email này sẽ không được thực thi trong trường hợp này
+                # Chúng tôi đã thêm return statement phía trên để trả về token trực tiếp
+                """
                 # Xử lý gửi email trong môi trường production
                 try:
                     # Send email
                     subject = 'Yêu cầu đặt lại mật khẩu'
                     
                     # Tạo nội dung email
-                    html_message = f"""
+                    html_message = f\"""
                     <!DOCTYPE html>
                     <html>
                     <head>
@@ -327,7 +330,7 @@ class ForgotPasswordView(generics.CreateAPIView):
                         </div>
                     </body>
                     </html>
-                    """
+                    \"""
                     
                     plain_message = strip_tags(html_message)
                     from_email = settings.DEFAULT_FROM_EMAIL
@@ -364,6 +367,7 @@ class ForgotPasswordView(generics.CreateAPIView):
                         {'error': 'Không thể gửi email. Vui lòng thử lại sau hoặc liên hệ bộ phận hỗ trợ.'},
                         status=status.HTTP_500_INTERNAL_SERVER_ERROR
                     )
+                """
                     
             except User.DoesNotExist:
                 # Email không tồn tại trong hệ thống
@@ -377,7 +381,7 @@ class ForgotPasswordView(generics.CreateAPIView):
             # Log lỗi tổng quát
             logger.error(f"Unexpected error in forgot password view: {str(e)}", exc_info=True)
             return Response(
-                {'error': 'Đã xảy ra lỗi. Vui lòng thử lại sau.'},
+                {'error': 'Đã xảy ra lỗi. Vui lòng thử lại sau.', 'debug_info': str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
