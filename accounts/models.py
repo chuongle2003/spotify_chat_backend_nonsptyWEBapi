@@ -65,9 +65,11 @@ class PasswordResetToken(models.Model):
     """Model for password reset tokens."""
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_tokens')
     token = models.CharField(max_length=6)
+    token_hash = models.CharField(max_length=128, null=True, blank=True)  # Lưu hash của token
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField()
     is_used = models.BooleanField(default=False)
+    attempted_uses = models.PositiveIntegerField(default=0)  # Đếm số lần thử sử dụng token
     
     def __str__(self):
         return f"Reset token for {self.user.email}"
@@ -76,6 +78,10 @@ class PasswordResetToken(models.Model):
         if not self.token:
             # Tạo token ngẫu nhiên gồm 6 chữ số
             self.token = ''.join(random.choices(string.digits, k=6))
+            
+            # Tạo hash của token để lưu trữ an toàn
+            import hashlib
+            self.token_hash = hashlib.sha256(self.token.encode()).hexdigest()
         
         if not self.expires_at:
             # Token hết hạn sau 15 phút
@@ -86,16 +92,48 @@ class PasswordResetToken(models.Model):
     @property
     def is_valid(self):
         """Check if token is valid."""
-        return not self.is_used and self.expires_at > timezone.now()
+        return not self.is_used and self.expires_at > timezone.now() and self.attempted_uses < 5
+    
+    def increment_attempts(self):
+        """Tăng số lần thử sử dụng token."""
+        self.attempted_uses += 1
+        self.save(update_fields=['attempted_uses'])
     
     @classmethod
     def generate_token(cls, user):
         """Generate a new token for the user."""
         # Đánh dấu tất cả token cũ của user là đã sử dụng
-        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+        cls.invalidate_all_tokens(user)
         
         # Tạo token mới
         return cls.objects.create(user=user)
+    
+    @classmethod
+    def invalidate_all_tokens(cls, user):
+        """Invalidate all tokens for a user."""
+        cls.objects.filter(user=user, is_used=False).update(is_used=True)
+        
+    @classmethod 
+    def verify_token(cls, user, token_value):
+        """Xác minh token. Trả về token nếu hợp lệ, None nếu không."""
+        # Tìm token mới nhất chưa sử dụng
+        token_obj = cls.objects.filter(user=user, is_used=False).order_by('-created_at').first()
+        
+        if not token_obj:
+            return None
+            
+        # Tăng số lần thử
+        token_obj.increment_attempts()
+        
+        # Kiểm tra tính hợp lệ
+        if not token_obj.is_valid:
+            return None
+            
+        # Kiểm tra giá trị token
+        if token_obj.token != token_value:
+            return None
+            
+        return token_obj
 
 class UserConnection(models.Model):
     CONNECTION_STATUS = (

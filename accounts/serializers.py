@@ -193,19 +193,13 @@ class ForgotPasswordSerializer(serializers.Serializer):
     
     def validate_email(self, value):
         """
-        Kiểm tra email phải là gmail và tồn tại trong hệ thống.
+        Kiểm tra email phải là gmail.
         """
         if not value.endswith('@gmail.com'):
             raise serializers.ValidationError("Email phải là địa chỉ Gmail (@gmail.com).")
         
-        # Kiểm tra email có tồn tại trong database không
-        User = get_user_model()
-        try:
-            User.objects.get(email=value)
-        except User.DoesNotExist:
-            # Không tiết lộ liệu email tồn tại hay không vì lý do bảo mật
-            # Chúng ta sẽ xử lý trong view
-            pass
+        # Đã loại bỏ việc kiểm tra email tồn tại ở đây để tăng cường bảo mật
+        # Việc kiểm tra sẽ được thực hiện trong view mà không tiết lộ kết quả
             
         return value
 

@@ -19,6 +19,7 @@ from django.template.loader import render_to_string
 from django.utils.html import strip_tags
 from django.utils import timezone
 from django.db.models import Q
+from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
@@ -367,10 +368,10 @@ class ForgotPasswordView(generics.CreateAPIView):
             except User.DoesNotExist:
                 # Email không tồn tại trong hệ thống
                 logger.info(f"Password reset attempted for non-existent email: {email}")
-                # Trả về message thân thiện nhưng không tiết lộ rằng email không tồn tại
+                # Thay đổi ở đây: Trả về thông báo trung lập để bảo vệ thông tin
                 return Response(
-                    {'error': 'Email này chưa được đăng ký trong hệ thống của chúng tôi.'},
-                    status=status.HTTP_404_NOT_FOUND
+                    {'message': 'Nếu email tồn tại trong hệ thống, mã xác nhận đã được gửi đến email của bạn.'},
+                    status=status.HTTP_200_OK
                 )
         except Exception as e:
             # Log lỗi tổng quát
@@ -388,54 +389,92 @@ class VerifyPasswordResetTokenView(generics.CreateAPIView):
     serializer_class = VerifyPasswordResetTokenSerializer
     
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        email = serializer.validated_data.get('email')
-        token = serializer.validated_data.get('token')
-        new_password = serializer.validated_data.get('new_password')
-        
         try:
-            user = User.objects.get(email=email)
-            token_obj = PasswordResetToken.objects.filter(
-                user=user,
-                token=token,
-                is_used=False
-            ).order_by('-created_at').first()
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
             
-            if not token_obj:
+            email = serializer.validated_data.get('email')
+            token = serializer.validated_data.get('token')
+            new_password = serializer.validated_data.get('new_password')
+            
+            try:
+                # Tìm user theo email
+                user = User.objects.get(email=email)
+                
+                # Sử dụng phương thức mới để xác minh token
+                token_obj = PasswordResetToken.verify_token(user, token)
+                
+                # Nếu không tìm thấy token hợp lệ
+                if not token_obj:
+                    # Tăng số lần thử sai trong cache
+                    self._increase_failed_attempts(user)
+                    return Response(
+                        {'error': 'Mã xác nhận không hợp lệ hoặc đã hết hạn.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Kiểm tra tài khoản có bị tạm khóa do quá nhiều lần thử không
+                if self._is_account_locked(user):
+                    # Đánh dấu token là đã sử dụng để tránh tái sử dụng
+                    token_obj.is_used = True
+                    token_obj.save()
+                    
+                    return Response(
+                        {'error': 'Tài khoản tạm thời bị khóa do quá nhiều lần thử không thành công. Vui lòng thử lại sau.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Đánh dấu token đã sử dụng
+                token_obj.is_used = True
+                token_obj.save()
+                
+                # Đặt mật khẩu mới
+                user.set_password(new_password)
+                user.save()
+                
+                # Reset số lần thử sai
+                cache_key = f"pwd_reset_attempts_{user.id}"
+                cache.delete(cache_key)
+                
+                # Vô hiệu hóa tất cả các JWT token hiện có của user (nếu có hệ thống quản lý)
+                # OutstandingToken.objects.filter(user=user).update(is_blacklisted=True)
+                
+                logger.info(f"Password reset successful for {user.email}")
+                
                 return Response(
-                    {'error': 'Mã xác nhận không hợp lệ.'},
+                    {'message': 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập với mật khẩu mới.'},
+                    status=status.HTTP_200_OK
+                )
+                
+            except User.DoesNotExist:
+                # Không tiết lộ thông tin về việc email không tồn tại
+                logger.warning(f"Password reset verification attempted for non-existent email: {email}")
+                return Response(
+                    {'error': 'Thông tin xác thực không hợp lệ.'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            if not token_obj.is_valid:
-                return Response(
-                    {'error': 'Mã xác nhận đã hết hạn.'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Đánh dấu token đã sử dụng
-            token_obj.is_used = True
-            token_obj.save()
-            
-            # Đặt mật khẩu mới
-            user.set_password(new_password)
-            user.save()
-            
-            logger.info(f"Password reset successful for {user.email}")
-            
+                
+        except Exception as e:
+            logger.error(f"Error in reset password view: {str(e)}", exc_info=True)
             return Response(
-                {'message': 'Đặt lại mật khẩu thành công. Vui lòng đăng nhập với mật khẩu mới.'},
-                status=status.HTTP_200_OK
+                {'error': 'Đã xảy ra lỗi. Vui lòng thử lại sau.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-            
-        except User.DoesNotExist:
-            logger.warning(f"Password reset verification attempted for non-existent email: {email}")
-            return Response(
-                {'error': 'Email không tồn tại.'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+    
+    def _increase_failed_attempts(self, user):
+        """Tăng số lần thử sai cho người dùng"""
+        cache_key = f"pwd_reset_attempts_{user.id}"
+        attempts = cache.get(cache_key, 0)
+        attempts += 1
+        # Lưu số lần thử sai trong 30 phút
+        cache.set(cache_key, attempts, timeout=1800)
+        logger.warning(f"Failed password reset attempt {attempts} for user {user.email}")
+    
+    def _is_account_locked(self, user):
+        """Kiểm tra tài khoản có bị khóa tạm thời không (quá 5 lần thử sai)"""
+        cache_key = f"pwd_reset_attempts_{user.id}"
+        attempts = cache.get(cache_key, 0)
+        return attempts >= 5
 
 # API lấy danh sách người dùng đang theo dõi
 class UserFollowingListView(generics.ListAPIView):
