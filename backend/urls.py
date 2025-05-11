@@ -51,7 +51,7 @@ api_v1_patterns = [
 ]
 
 urlpatterns = [
-    # Admin site
+    # Admin site của Django (không liên quan đến API)
     path('admin/', admin.site.urls),
     
     # API v1

@@ -19,11 +19,17 @@ from rest_framework_simplejwt.views import (
 # Đăng ký các viewsets với router để tạo URLs tự động
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
-router.register(r'admin/users', AdminViewSet)  # Sửa lại: loại bỏ dấu / và làm rõ đường dẫn
+
+# Tạo router riêng cho admin APIs
+admin_router = DefaultRouter()
+admin_router.register(r'users', AdminViewSet)
 
 urlpatterns = [
-    # Include router URLs
+    # Include router URLs cho user thông thường
     path('', include(router.urls)),
+    
+    # Admin API endpoints - tách riêng khỏi Django admin
+    path('admin/', include(admin_router.urls)),
     
     # Các endpoints xác thực JWT
     path('token/', LoginView.as_view(), name='token_obtain_pair'),

@@ -75,11 +75,30 @@ class AdminViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminUser]
     filter_backends = [filters.SearchFilter]
     search_fields = ['username', 'email', 'first_name', 'last_name']
+    authentication_classes = [JWTAuthentication]  # Đảm bảo chỉ sử dụng JWT, không phải session auth
     
     def get_serializer_class(self):
         if self.action == 'create':
             return AdminUserCreateSerializer
         return AdminUserSerializer
+    
+    def list(self, request, *args, **kwargs):
+        """Trả về danh sách người dùng dạng JSON"""
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+            
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+    
+    def retrieve(self, request, *args, **kwargs):
+        """Trả về thông tin chi tiết của người dùng dạng JSON"""
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
     
     @action(detail=True, methods=['get'])
     def complete(self, request, pk=None):
