@@ -777,7 +777,12 @@ class PlaylistViewSet(viewsets.ModelViewSet):
                     if song.cover_image:
                         playlist.cover_image = song.cover_image
                         playlist.save()
-                        return Response({'status': 'Đã cập nhật ảnh bìa từ bài hát'})
+                        return Response({
+                            "id": playlist.id,
+                            "name": playlist.name,
+                            "cover_image": request.build_absolute_uri(playlist.cover_image.url) if request else None,
+                            "updated_at": playlist.updated_at
+                        })
                     else:
                         return Response(
                             {'error': 'Bài hát không có ảnh bìa'}, 
@@ -813,7 +818,13 @@ class PlaylistViewSet(viewsets.ModelViewSet):
         playlist.cover_image = image_file
         playlist.save()
         
-        return Response({'status': 'Đã cập nhật ảnh bìa thành công'})
+        # Trả về response theo định dạng trong tài liệu API
+        return Response({
+            "id": playlist.id,
+            "name": playlist.name,
+            "cover_image": request.build_absolute_uri(playlist.cover_image.url) if request else None,
+            "updated_at": playlist.updated_at
+        })
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def toggle_privacy(self, request, pk=None):
@@ -831,8 +842,13 @@ class PlaylistViewSet(viewsets.ModelViewSet):
         playlist.is_public = not playlist.is_public
         playlist.save()
         
-        status_text = 'công khai' if playlist.is_public else 'riêng tư'
-        return Response({'status': f'Đã chuyển playlist sang chế độ {status_text}'})
+        # Trả về response theo định dạng trong tài liệu API
+        return Response({
+            "id": playlist.id,
+            "name": playlist.name,
+            "is_public": playlist.is_public,
+            "updated_at": playlist.updated_at
+        })
     
     @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
     def follow(self, request, pk=None):
@@ -3604,22 +3620,25 @@ class AdminPlaylistViewSet(viewsets.ModelViewSet):
     def toggle_privacy(self, request, pk=None):
         """Chuyển đổi trạng thái công khai/riêng tư của playlist"""
         playlist = self.get_object()
+        
+        # Kiểm tra quyền chỉnh sửa playlist
+        if playlist.user != request.user:
+            return Response(
+                {'error': 'Bạn không có quyền chỉnh sửa playlist này'}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+            
+        # Đổi trạng thái
         playlist.is_public = not playlist.is_public
         playlist.save()
         
-        # Ghi log hành động
-        PlaylistEditHistory.log_action(
-            playlist=playlist,
-            user=request.user,
-            action='UPDATE_INFO',
-            details={
-                'old': {'is_public': not playlist.is_public},
-                'new': {'is_public': playlist.is_public},
-                'admin_action': True
-            }
-        )
-        
-        return Response({'status': f'Playlist đã được chuyển sang chế độ {"công khai" if playlist.is_public else "riêng tư"}'})
+        # Trả về response theo định dạng trong tài liệu API
+        return Response({
+            "id": playlist.id,
+            "name": playlist.name,
+            "is_public": playlist.is_public,
+            "updated_at": playlist.updated_at
+        })
     
     @action(detail=True, methods=['post'])
     def toggle_collaborative(self, request, pk=None):

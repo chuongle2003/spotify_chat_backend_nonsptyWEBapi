@@ -49,6 +49,10 @@ urlpatterns = [
     path('playlists/<int:pk>/update-cover/', views.PlaylistViewSet.as_view({'post': 'update_cover_image'}), name='playlist-update-cover'),
     path('playlists/<int:pk>/toggle-privacy/', views.PlaylistViewSet.as_view({'post': 'toggle_privacy'}), name='playlist-toggle-privacy'),
     path('playlists/<int:pk>/followers/', views.PlaylistViewSet.as_view({'get': 'followers'}), name='playlist-followers'),
+    path('playlists/<int:pk>/add_song/', views.PlaylistViewSet.as_view({'post': 'add_song'}), name='playlist-add-song'),
+    path('playlists/<int:pk>/remove_song/', views.PlaylistViewSet.as_view({'post': 'remove_song'}), name='playlist-remove-song'),
+    path('playlists/<int:pk>/follow/', views.PlaylistViewSet.as_view({'post': 'follow'}), name='playlist-follow'),
+    path('playlists/<int:pk>/unfollow/', views.PlaylistViewSet.as_view({'post': 'unfollow'}), name='playlist-unfollow'),
     
     # Music player functionality
     path('upload/', views.SongUploadView.as_view(), name='song-upload'),
