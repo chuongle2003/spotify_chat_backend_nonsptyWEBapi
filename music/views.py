@@ -27,7 +27,7 @@ from django.db.models import Q, Count, Avg, Sum, F
 import random
 from datetime import datetime, timedelta
 import django.utils.timezone
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.request import Request
 from .utils import get_audio_metadata, convert_audio_format, extract_synchronized_lyrics, import_synchronized_lyrics, normalize_audio, get_waveform_data, generate_song_recommendations, download_song_for_offline, verify_offline_song, get_offline_song_metadata
 import os
@@ -571,19 +571,21 @@ class PlaylistViewSet(viewsets.ModelViewSet):
     """ViewSet để xử lý các thao tác CRUD với Playlist"""
     queryset = Playlist.objects.all()
     serializer_class = PlaylistSerializer
-    parser_classes = (MultiPartParser, FormParser)
-
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+    
     def get_permissions(self):
         """
-        Cho phép người dùng chưa đăng nhập xem playlist công khai,
-        nhưng chỉ người dùng đã đăng nhập mới có thể thao tác.
+        Xác định quyền dựa vào action:
+        - list, retrieve: cho phép tất cả
+        - khác: yêu cầu xác thực
         """
         if self.action in ['list', 'retrieve']:
             permission_classes = [AllowAny]
         else:
             permission_classes = [IsAuthenticated]
+            
         return [permission() for permission in permission_classes]
-
+    
     def get_queryset(self):
         """Lọc playlist: chỉ hiển thị playlist công khai hoặc của user đang đăng nhập"""
         user = self.request.user
@@ -665,7 +667,7 @@ class PlaylistViewSet(viewsets.ModelViewSet):
                 
         return super().destroy(request, *args, **kwargs)
 
-    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated], parser_classes=[JSONParser])
     def add_song(self, request, pk=None):
         """Thêm bài hát vào playlist"""
         playlist = self.get_object()
@@ -3453,7 +3455,7 @@ class AdminPlaylistViewSet(viewsets.ModelViewSet):
     queryset = Playlist.objects.all().order_by('-created_at')
     serializer_class = PlaylistSerializer
     permission_classes = [IsAdminUser]
-    parser_classes = (MultiPartParser, FormParser)
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
     filter_backends = [SearchFilter, OrderingFilter, DjangoFilterBackend]
     search_fields = ['name', 'description', 'user__username']
     ordering_fields = ['name', 'created_at', 'updated_at']
